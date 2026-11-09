@@ -38,6 +38,8 @@ export interface SwarmOptions {
   maxSeatsPerBot: number;
   /** Parallel sign-ups; each one costs the API a scrypt hash. */
   registerConcurrency: number;
+  /** The most buyers addBots() will let the crowd grow to. No limit when absent. */
+  maxBots?: number;
 }
 
 export const DEFAULT_SWARM: SwarmOptions = {
@@ -46,6 +48,8 @@ export const DEFAULT_SWARM: SwarmOptions = {
   retryRate: 0.15,
   maxSeatsPerBot: 4,
   registerConcurrency: 12,
+  // Every buyer runs in this browser tab, which is what limits the size of the crowd.
+  maxBots: 2000,
 };
 
 export type ActivityKind = 'info' | 'success' | 'warn' | 'error';
@@ -62,6 +66,8 @@ export interface SwarmSnapshot {
   running: boolean;
   startedAt: number;
   phases: Record<BotPhase, number>;
+  /** Each buyer's phase, in arrival order, so the crowd view can follow individuals. */
+  bots: readonly BotPhase[];
   requests: number;
   /** 409s: a seat someone else got first. Every one is a double sale that did not happen. */
   conflicts: number;
@@ -107,6 +113,8 @@ export class Swarm {
   };
   private startedAt = 0;
   private running = false;
+  private readonly inFlight = new Set<Promise<void>>();
+  private readonly signUps: <T>(task: () => Promise<T>) => Promise<T>;
 
   constructor(
     private readonly backend: Backend,
@@ -115,23 +123,41 @@ export class Swarm {
     private readonly options: SwarmOptions = DEFAULT_SWARM,
     private readonly random: () => number = Math.random,
     private readonly sleep: (ms: number) => Promise<void> = defaultSleep,
-  ) {}
+  ) {
+    this.signUps = limiter(options.registerConcurrency);
+  }
 
-  /** Runs every bot to completion (or until stop()). */
+  /** Runs every bot to completion (or until stop()), including any added along the way. */
   async run(): Promise<void> {
     this.running = true;
     this.startedAt = Date.now();
-    const labels = Array.from(
-      { length: this.options.bots },
-      (_, i) => `bot-${String(i + 1).padStart(3, '0')}`,
-    );
-    for (const label of labels) this.phase.set(label, 'registering');
-    this.log('swarm', 'info', `${labels.length} buyers arrive for ${this.event.name}`);
+    this.spawn(this.options.bots);
+    this.log('swarm', 'info', `${this.options.bots} buyers arrive for ${this.event.name}`);
 
-    const signUps = limiter(this.options.registerConcurrency);
-    await Promise.all(labels.map((label) => this.runBot(label, signUps)));
+    // A loop, because addBots() can add more while the current ones are running.
+    while (this.inFlight.size > 0) await Promise.all(this.inFlight);
     this.running = false;
     if (!this.stopped) this.log('swarm', 'info', 'Every buyer has finished');
+  }
+
+  /** More buyers join a running sale. Returns how many fit under maxBots. */
+  addBots(count: number): number {
+    if (!this.running || this.stopped) return 0;
+    const room = (this.options.maxBots ?? Infinity) - this.phase.size;
+    const added = Math.max(0, Math.min(Math.floor(count), room));
+    if (added > 0) this.spawn(added);
+    return added;
+  }
+
+  private spawn(count: number) {
+    for (let i = 0; i < count; i++) {
+      const label = `bot-${String(this.phase.size + 1).padStart(3, '0')}`;
+      this.phase.set(label, 'registering');
+      const bot: Promise<void> = this.runBot(label, this.signUps).finally(() => {
+        this.inFlight.delete(bot);
+      });
+      this.inFlight.add(bot);
+    }
   }
 
   stop(): void {
@@ -146,6 +172,7 @@ export class Swarm {
       running: this.running,
       startedAt: this.startedAt,
       phases,
+      bots: [...this.phase.values()],
       ...this.counters,
       seatsConfirmed: this.confirmedBy.size,
       activity: this.activity,

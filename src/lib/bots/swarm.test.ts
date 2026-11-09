@@ -20,7 +20,12 @@ const flush = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
  * Runs a whole flash sale on a virtual clock: bots' sleeps and the simulation's background work
  * both advance in 100 ms steps, so minutes of sale run in well under a second.
  */
-async function runSale(seed: number, options: Partial<SwarmOptions>, seats: number) {
+async function runSale(
+  seed: number,
+  options: Partial<SwarmOptions>,
+  seats: number,
+  during?: (swarm: Swarm, clock: number) => void,
+) {
   let clock = 0;
   const random = seeded(seed);
   const sim = new SimBackend({
@@ -73,6 +78,7 @@ async function runSale(seed: number, options: Partial<SwarmOptions>, seats: numb
   while (!progress.done && clock < 15 * 60_000) {
     await flush();
     clock += 100;
+    during?.(swarm, clock);
     sim.tick();
     for (const timer of timers.filter((t) => t.at <= clock)) {
       timers.splice(timers.indexOf(timer), 1);
@@ -105,6 +111,37 @@ describe('Swarm against the simulated backend', () => {
     const { sim, swarm, event } = await runSale(7, { abandonRate: 0 }, 40);
     const sold = (await sim.seats(event.id)).seats.filter((s) => s.status === 'sold').length;
     expect(sold).toBe(swarm.snapshot().seatsConfirmed);
+  });
+
+  it.each([11, 12])('stays correct when a surge joins mid-sale (seed %i)', async (seed) => {
+    const added: number[] = [];
+    const { sim, swarm } = await runSale(seed, { bots: 20 }, 30, (s, clock) => {
+      if (clock === 1000) added.push(s.addBots(50));
+      if (clock === 2000) added.push(s.addBots(30));
+    });
+    const result = swarm.snapshot();
+
+    expect(added).toEqual([50, 30]);
+    expect(result.bots).toHaveLength(100);
+    expect(result.doubleSold).toBe(0);
+    expect(sim.doubleBookedSeats()).toBe(0);
+    expect(result.seatsConfirmed).toBeLessThanOrEqual(30);
+    // Late arrivals are followed to an end state too, not abandoned when the first wave ends.
+    const active = result.phases.registering + result.phases.queued + result.phases.holding;
+    expect(active + result.phases.booking + result.phases.paying).toBe(0);
+  });
+
+  it('caps the crowd at maxBots, and adds nobody once stopped', async () => {
+    const added: number[] = [];
+    await runSale(21, { bots: 20, maxBots: 25 }, 30, (s, clock) => {
+      if (clock === 500) added.push(s.addBots(10));
+      if (clock === 600) added.push(s.addBots(10));
+      if (clock === 700) {
+        s.stop();
+        added.push(s.addBots(10));
+      }
+    });
+    expect(added).toEqual([5, 0, 0]);
   });
 });
 

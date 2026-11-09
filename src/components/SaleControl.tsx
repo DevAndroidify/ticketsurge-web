@@ -1,4 +1,4 @@
-import { Play, Square, Users, Zap } from 'lucide-react';
+import { Play, Rocket, Square, Users, Zap } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useState } from 'react';
 import type { SaleOptions } from '../lib/backend';
@@ -28,20 +28,29 @@ const FUNNEL: { phase: BotPhase; label: string; color: string }[] = [
   { phase: 'failed', label: 'Errors', color: 'bg-bad' },
 ];
 
+const SURGES = [50, 200, 500];
+
 export function SaleControl({
   mode,
   sale,
   clientRps,
   canLaunch,
+  reusesEvent,
   onLaunch,
   onStop,
+  onSurge,
+  onArrivalRate,
 }: {
   mode: Mode;
   sale: DashboardState['sale'];
   clientRps: number;
   canLaunch: boolean;
+  /** The crowd will join the event already open, so its layout cannot be chosen. */
+  reusesEvent: boolean;
   onLaunch: (options: SaleOptions, swarm: SwarmOptions) => void;
   onStop: () => void;
+  onSurge: (count: number) => void;
+  onArrivalRate: (perSecond: number) => void;
 }) {
   const [bots, setBots] = useState(300);
   const [layout, setLayout] = useState('medium');
@@ -52,6 +61,8 @@ export function SaleControl({
   const busy = sale.phase === 'preparing' || sale.phase === 'running';
   const swarm = sale.swarm;
   const total = swarm ? Object.values(swarm.phases).reduce((a, b) => a + b, 0) : 0;
+  const crowd = swarm?.bots.length ?? 0;
+  const crowdCap = DEFAULT_SWARM.maxBots ?? 0;
 
   const launch = () => {
     const chosen = LAYOUTS.find((l) => l.id === layout) ?? LAYOUTS[1];
@@ -108,7 +119,7 @@ export function SaleControl({
               <button
                 key={l.id}
                 type="button"
-                disabled={busy}
+                disabled={busy || reusesEvent}
                 onClick={() => {
                   setLayout(l.id);
                 }}
@@ -174,6 +185,50 @@ export function SaleControl({
           </details>
         )}
 
+        {sale.phase === 'running' && (
+          <div className="rounded-xl border border-http/30 bg-http/5 p-3">
+            <div className="mb-2 flex items-center gap-1.5 text-xs font-semibold text-ink">
+              <Rocket className="size-3.5 text-http" /> Increase the traffic
+            </div>
+            <div className="grid grid-cols-3 gap-1.5">
+              {SURGES.map((count) => (
+                <motion.button
+                  key={count}
+                  type="button"
+                  whileTap={{ scale: 0.92 }}
+                  disabled={crowd >= crowdCap}
+                  onClick={() => {
+                    onSurge(count);
+                  }}
+                  className="rounded-lg border border-http/40 bg-http/10 py-2 text-xs font-semibold text-ink transition hover:bg-http/25 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  +{count}
+                </motion.button>
+              ))}
+            </div>
+            <label className="mt-3 block">
+              <div className="mb-1.5 flex justify-between text-xs">
+                <span className="text-muted">Steady arrivals</span>
+                <span className="font-mono text-ink tabular">{sale.arrivalRate}/s</span>
+              </div>
+              <input
+                type="range"
+                min={0}
+                max={40}
+                value={sale.arrivalRate}
+                onChange={(e) => {
+                  onArrivalRate(Number(e.target.value));
+                }}
+                className="w-full"
+              />
+            </label>
+            <p className="mt-1.5 text-[11px] text-faint tabular">
+              {formatInt(crowd)} of {formatInt(crowdCap)} buyers
+              {crowd >= crowdCap ? ' · crowd is full' : ''}
+            </p>
+          </div>
+        )}
+
         {busy ? (
           <button
             type="button"
@@ -192,7 +247,11 @@ export function SaleControl({
             className="relative flex w-full items-center justify-center gap-2 overflow-hidden rounded-xl bg-http py-2.5 text-sm font-semibold text-white shadow-[0_0_30px_rgb(107_147_255/0.35)] transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none"
           >
             <Play className="size-4" />
-            {sale.phase === 'finished' ? 'Run another flash sale' : 'Launch flash sale'}
+            {reusesEvent
+              ? 'Send in the crowd'
+              : sale.phase === 'finished'
+                ? 'Run another flash sale'
+                : 'Launch flash sale'}
           </motion.button>
         )}
         {!canLaunch && !busy && (

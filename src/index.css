@@ -16,6 +16,8 @@
   --color-kafka: #f6ad2b;
   --color-pg: #45b8ff;
   --color-ws: #33d69f;
+  /* The visitor's own purchase, wherever it appears. */
+  --color-you: #a87aff;
 
   --color-ok: #22c55e;
   --color-warn: #f59e0b;
@@ -99,10 +101,44 @@ body {
   animation: feed-in 400ms ease-out;
 }
 
+/* A flow-diagram node as the visitor's comet arrives. */
+@keyframes node-flash {
+  from {
+    opacity: 0.95;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(1.16);
+  }
+}
+
+.node-flash {
+  animation: node-flash 620ms ease-out forwards;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+/* The visitor's own seats keep glowing, so they stand out in a busy map. */
+@keyframes seat-mine {
+  0%,
+  100% {
+    box-shadow: 0 0 2px 0 currentColor;
+  }
+  50% {
+    box-shadow: 0 0 9px 2px currentColor;
+  }
+}
+
+.seat-mine {
+  animation: seat-mine 1.4s ease-in-out infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .seat-pop,
   .feed-in,
-  .ping-soft {
+  .ping-soft,
+  .seat-mine {
     animation: none;
   }
 }

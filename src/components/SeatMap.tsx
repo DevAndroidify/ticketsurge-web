@@ -11,16 +11,27 @@ const SEAT_CLASS: Record<SeatStatus, string> = {
   sold: 'bg-seat-sold text-seat-sold',
 };
 
+/** The visitor's part in the map. Everything is empty when they are not buying. */
+export interface SeatPicking {
+  /** True while seats can be clicked. */
+  active: boolean;
+  selected: ReadonlySet<string>;
+  mine: ReadonlySet<string>;
+  onToggle: (seatId: string) => void;
+}
+
 export function SeatMap({
   event,
   seats,
   socket,
   degraded,
+  picking,
 }: {
   event?: SaleEvent;
   seats: SeatCell[];
   socket: SocketState;
   degraded: boolean;
+  picking: SeatPicking;
 }) {
   const counts = { available: 0, held: 0, sold: 0 };
   for (const seat of seats) counts[seat.status]++;
@@ -32,10 +43,11 @@ export function SeatMap({
       subtitle={
         event
           ? `${event.name} · ${formatInt(event.totalSeats)} seats · updates over WebSocket`
-          : 'Launch a flash sale to fill it'
+          : 'Join the sale or launch a crowd to fill it'
       }
       right={
         <div className="flex flex-wrap gap-1.5">
+          {picking.active && <Pill tone="info">Your turn: click seats</Pill>}
           {degraded && <Pill tone="warn">Redis down · holds hidden</Pill>}
           <Pill tone={socket === 'open' ? 'good' : socket === 'connecting' ? 'warn' : 'neutral'}>
             ws {socket}
@@ -54,24 +66,34 @@ export function SeatMap({
           No sale running
         </div>
       ) : (
-        <>
+        <div className="overflow-x-auto">
           <div className="mx-auto mb-4 h-6 max-w-sm rounded-b-[40px] border border-t-0 border-line bg-gradient-to-b from-panel-2 to-transparent text-center text-[10px] leading-6 tracking-[0.3em] text-faint">
             STAGE
           </div>
           <div className="flex flex-wrap justify-center gap-x-6 gap-y-4">
             {[...sections].map(([name, list]) => (
-              <Section key={name} name={name} seats={list} />
+              <Section key={name} name={name} seats={list} picking={picking} />
             ))}
           </div>
-        </>
+        </div>
       )}
     </Panel>
   );
 }
 
-const Section = memo(function Section({ name, seats }: { name: string; seats: SeatCell[] }) {
+const Section = memo(function Section({
+  name,
+  seats,
+  picking,
+}: {
+  name: string;
+  seats: SeatCell[];
+  picking: SeatPicking;
+}) {
   const rows = groupBy(seats, (s) => s.row);
   const sold = seats.filter((s) => s.status === 'sold').length;
+  // Bigger seats while choosing, so they are easy to hit.
+  const size = picking.active ? 'size-[15px] sm:size-[18px]' : 'size-[9px] sm:size-[10px]';
   return (
     <div className="min-w-0">
       <div className="mb-1.5 flex items-baseline justify-between gap-3 text-[11px]">
@@ -85,12 +107,27 @@ const Section = memo(function Section({ name, seats }: { name: string; seats: Se
           <div key={row} className="flex items-center gap-[3px]">
             <span className="w-3 font-mono text-[8px] text-faint">{row}</span>
             {list.map((seat) => {
+              const selected = picking.selected.has(seat.id);
+              const mine = picking.mine.has(seat.id);
+              const label = `${seat.section} ${seat.row}${seat.number} · ${mine ? 'yours' : seat.status}`;
+              const look = `rounded-[2px] transition-[width,height,background-color] duration-300 ${size} ${seatLook(seat.status, selected, mine)} ${seat.changedAt > 0 ? 'seat-pop' : ''}`;
+              // A new key replays the pop animation each time the status changes.
+              const key = `${seat.id}:${seat.changedAt}`;
+              if (!picking.active) return <span key={key} title={label} className={look} />;
+              // A chosen seat that was taken stays clickable, so it can be removed.
+              const clickable = seat.status === 'available' || selected;
               return (
-                <span
-                  // A new key replays the pop animation each time the status changes.
-                  key={`${seat.id}:${seat.changedAt}`}
-                  title={`${seat.section} ${seat.row}${seat.number} · ${seat.status}`}
-                  className={`size-[9px] rounded-[2px] transition-colors duration-500 sm:size-[10px] ${SEAT_CLASS[seat.status]} ${seat.changedAt > 0 ? 'seat-pop' : ''}`}
+                <button
+                  key={key}
+                  type="button"
+                  title={label}
+                  aria-label={label}
+                  aria-pressed={selected}
+                  disabled={!clickable}
+                  onClick={() => {
+                    picking.onToggle(seat.id);
+                  }}
+                  className={`${look} ${clickable ? 'cursor-pointer hover:brightness-150' : 'cursor-not-allowed'}`}
                 />
               );
             })}
@@ -100,6 +137,16 @@ const Section = memo(function Section({ name, seats }: { name: string; seats: Se
     </div>
   );
 });
+
+function seatLook(status: SeatStatus, selected: boolean, mine: boolean): string {
+  if (mine) return 'bg-you text-you seat-mine';
+  if (selected) {
+    return status === 'available'
+      ? 'bg-you text-you ring-2 ring-you/50'
+      : 'bg-bad text-bad ring-2 ring-bad/60';
+  }
+  return SEAT_CLASS[status];
+}
 
 function Count({ label, value, swatch }: { label: string; value: number; swatch: string }) {
   return (
