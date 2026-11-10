@@ -1,17 +1,28 @@
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import { MotionConfig, motion } from 'motion/react';
 import { ActivityFeed } from './components/ActivityFeed';
 import { BuyPanel } from './components/BuyPanel';
 import { ConnectPanel } from './components/ConnectPanel';
 import { CrowdStage } from './components/CrowdStage';
 import { FlowDiagram } from './components/FlowDiagram';
 import { GuaranteePanel } from './components/GuaranteePanel';
-import { Header, LogoMark, type Tab } from './components/Header';
+import { Header, LogoMark } from './components/Header';
+import { TABS, type Tab } from './components/nav';
 import { InfraPanel } from './components/InfraPanel';
 import { KafkaPanel } from './components/KafkaPanel';
 import { SaleControl } from './components/SaleControl';
-import { Counters, Footer, HowItWorks, Intro, JustNow, Note } from './components/SalePage';
+import {
+  Counters,
+  Footer,
+  HowItWorks,
+  Intro,
+  JustNow,
+  Note,
+  SaleStatus,
+} from './components/SalePage';
 import { SeatMap, type SeatPicking } from './components/SeatMap';
 import { LatencyChart, TrafficChart } from './components/TrafficChart';
+import { SectionHeading } from './components/ui';
 import type { Backend, SaleOptions } from './lib/backend';
 import { DEFAULT_SWARM, type BotPhase } from './lib/bots/swarm';
 import type { JourneyEntry } from './lib/buyer/journey';
@@ -109,9 +120,7 @@ function Dashboard({ controller, notice }: { controller: DashboardController; no
   const backend = controller.backend;
   const endpoints = backend instanceof LiveBackend ? backend.endpoints : undefined;
   const [connectOpen, setConnectOpen] = useState(false);
-  const [tab, setTab] = useState<Tab>(() =>
-    location.hash === '#control-room' ? 'control' : 'sale',
-  );
+  const [tab, setTab] = useState<Tab>('sale');
   const apiUp = state.components.find((c) => c.id === 'api')?.state === 'up';
   const buyer = state.buyer;
   const { phase } = state.sale;
@@ -151,26 +160,56 @@ function Dashboard({ controller, notice }: { controller: DashboardController; no
     });
   }, [apiUp, controller]);
 
-  const changeTab = (next: Tab) => {
-    setTab(next);
+  // The tabs follow the scroll: the active one is the last part whose top has passed a third of
+  // the way down the screen.
+  useEffect(() => {
+    let frame = 0;
+    const update = () => {
+      frame = 0;
+      let current: Tab = 'sale';
+      for (const t of TABS) {
+        const top = document.getElementById(t.anchor)?.getBoundingClientRect().top;
+        if (t.id !== 'sale' && top !== undefined && top < window.innerHeight / 3) current = t.id;
+      }
+      // The last part may never reach the top: at the bottom of the page, it is the one in view.
+      const atBottom =
+        window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 4;
+      if (atBottom) current = TABS[TABS.length - 1]?.id ?? current;
+      setTab(current);
+    };
+    const onScroll = () => {
+      if (!frame) frame = requestAnimationFrame(update);
+    };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('resize', onScroll);
+    onScroll();
+    // A link to #control-room or #how-it-works lands there once the page has rendered.
+    const target = location.hash.slice(1);
+    const landing = target
+      ? requestAnimationFrame(() => document.getElementById(target)?.scrollIntoView())
+      : 0;
+    return () => {
+      cancelAnimationFrame(frame);
+      cancelAnimationFrame(landing);
+      window.removeEventListener('scroll', onScroll);
+      window.removeEventListener('resize', onScroll);
+    };
+  }, []);
+
+  const goTo = (next: Tab) => {
+    const anchor = TABS.find((t) => t.id === next)?.anchor ?? 'top';
     history.replaceState(
       null,
       '',
-      next === 'control' ? '#control-room' : location.pathname + location.search,
+      next === 'sale' ? location.pathname + location.search : `#${anchor}`,
     );
-    if (next === 'how') {
-      requestAnimationFrame(() => {
-        document.getElementById('how-it-works')?.scrollIntoView({ behavior: 'smooth' });
-      });
-    } else {
-      window.scrollTo({ top: 0 });
-    }
+    if (next === 'sale') window.scrollTo({ top: 0, behavior: 'smooth' });
+    else document.getElementById(anchor)?.scrollIntoView({ behavior: 'smooth' });
   };
 
   const startSale = () => {
     if (busy) return;
     void controller.launch(DEFAULT_LAYOUT, DEFAULT_SWARM);
-    if (tab !== 'sale') changeTab('sale');
   };
 
   const startLabel =
@@ -183,51 +222,50 @@ function Dashboard({ controller, notice }: { controller: DashboardController; no
           : 'Start a sale';
 
   return (
-    <div className="min-h-screen bg-bg text-ink">
-      <ConnectPanel
-        open={connectOpen}
-        onClose={() => {
-          setConnectOpen(false);
-        }}
-      />
-      <Header
-        tab={tab}
-        onTab={changeTab}
-        endpoints={endpoints}
-        onConnect={() => {
-          setConnectOpen(true);
-        }}
-        onDisconnect={disconnect}
-        startLabel={startLabel}
-        canStart={apiUp && !busy}
-        onStart={startSale}
-      />
+    <MotionConfig reducedMotion="user">
+      <div className="min-h-screen bg-bg text-ink">
+        <ConnectPanel
+          open={connectOpen}
+          onClose={() => {
+            setConnectOpen(false);
+          }}
+        />
+        <Header
+          tab={tab}
+          onTab={goTo}
+          endpoints={endpoints}
+          onConnect={() => {
+            setConnectOpen(true);
+          }}
+          onDisconnect={disconnect}
+          startLabel={startLabel}
+          canStart={apiUp && !busy}
+          onStart={startSale}
+        />
 
-      {notice === 'local-down' && (
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-ink px-4 py-3 text-[15px] sm:px-8">
-          <span className="min-w-0 flex-1">
-            Your backend on localhost:3000 is not answering, so this is the simulation in this tab.
-            Start it with npm run dev:all and reload.
-          </span>
-          <button
-            type="button"
-            onClick={disconnect}
-            className="border-0 bg-transparent p-0 font-medium underline underline-offset-4"
-          >
-            Disconnect
-          </button>
-        </div>
-      )}
+        {notice === 'local-down' && (
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-ink px-4 py-3 text-[15px] sm:px-8">
+            <span className="min-w-0 flex-1">
+              Your backend on localhost:3000 is not answering, so this is the simulation in this
+              tab. Start it with npm run dev:all and reload.
+            </span>
+            <button
+              type="button"
+              onClick={disconnect}
+              className="border-0 bg-transparent p-0 font-medium underline underline-offset-4"
+            >
+              Disconnect
+            </button>
+          </div>
+        )}
 
-      {tab === 'control' ? (
-        <ControlRoom controller={controller} state={state} endpoints={endpoints} />
-      ) : (
-        <main>
+        <main id="top">
           <Intro
             people={state.sale.swarm?.bots.length ?? DEFAULT_SWARM.bots}
             seats={state.sale.event?.totalSeats ?? DEFAULT_SEATS}
           />
           <Counters state={state} />
+          <SaleStatus state={state} />
           <section className="flex flex-wrap border-b border-ink">
             <div className="flex min-w-0 flex-[2_1_640px] flex-col gap-4 border-b border-ink px-4 pt-7 pb-10 sm:px-8 lg:border-r lg:border-b-0">
               <SeatMap
@@ -291,19 +329,25 @@ function Dashboard({ controller, notice }: { controller: DashboardController; no
               </div>
             </aside>
           </section>
+          <ControlRoom controller={controller} state={state} endpoints={endpoints} />
           <HowItWorks
+            state={state}
+            simulated={!endpoints}
             onControlRoom={() => {
-              changeTab('control');
+              goTo('control');
             }}
           />
         </main>
-      )}
-      <Footer />
-    </div>
+        <Footer />
+      </div>
+    </MotionConfig>
   );
 }
 
-/** Every panel from the earlier dashboard, unchanged: crowd, traffic, infrastructure, Kafka. */
+/**
+ * The control room, as the part of the page you scroll into after the venue: the crowd, a request
+ * through the system, the traffic and services, and the proof. Each box rises in as it arrives.
+ */
 function ControlRoom({
   controller,
   state,
@@ -317,12 +361,25 @@ function ControlRoom({
   const apiUp = state.components.find((c) => c.id === 'api')?.state === 'up';
   const other = endpoints ? 'sim' : 'live';
   return (
-    <main className="space-y-5 px-4 py-8 sm:px-8">
-      <div className="flex flex-wrap items-baseline justify-between gap-4 border-b border-line pb-4">
-        <div>
-          <h1 className="m-0 text-[34px] font-semibold tracking-[-0.01em]">Control room</h1>
-          <p className="m-0 mt-1 text-[15px] text-muted">
-            The crowd, the traffic, every container and service, and Kafka.{' '}
+    <section
+      id="control-room"
+      aria-label="Control room"
+      className="scroll-mt-16 space-y-5 border-b border-ink px-4 pt-12 pb-12 sm:px-8"
+    >
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true, amount: 0.4 }}
+        transition={{ duration: 0.7, ease: [0.2, 0.8, 0.2, 1] }}
+        className="flex flex-wrap items-end justify-between gap-4"
+      >
+        <div className="max-w-2xl">
+          <h2 className="m-0 text-[clamp(2rem,4.5vw,3rem)] leading-[1.05] font-semibold tracking-[-0.02em]">
+            The control room
+          </h2>
+          <p className="m-0 mt-2 text-[17px] leading-normal text-muted">
+            Everything behind the venue above: the crowd, one request on its way through the system,
+            the traffic, every container and service, and the proof.{' '}
             {endpoints ? 'Live from your backend.' : 'Simulated in this tab.'}
           </p>
         </div>
@@ -353,8 +410,13 @@ function ControlRoom({
             </a>
           )}
         </div>
-      </div>
+      </motion.div>
 
+      <SectionHeading
+        number="1"
+        title="The crowd"
+        text="Every dot is one buyer. Turn the traffic up while it runs."
+      />
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_390px]">
         <CrowdStage
           bots={state.sale.swarm?.bots ?? NO_BOTS}
@@ -381,6 +443,11 @@ function ControlRoom({
         />
       </div>
 
+      <SectionHeading
+        number="2"
+        title="One request, end to end"
+        text="Buy a ticket above and follow it through every service."
+      />
       <FlowDiagram
         metrics={state.metrics}
         clientRps={state.clientRps}
@@ -388,6 +455,11 @@ function ControlRoom({
         journey={state.buyer?.log ?? NO_ENTRIES}
       />
 
+      <SectionHeading
+        number="3"
+        title="Under load"
+        text="Requests by outcome, and every container and service."
+      />
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_390px]">
         <TrafficChart history={state.history} mode={backend.mode} />
         <InfraPanel
@@ -400,12 +472,17 @@ function ControlRoom({
         />
       </div>
 
+      <SectionHeading
+        number="4"
+        title="The proof"
+        text="Nothing lost in Kafka, nothing sold twice, checked while it runs."
+      />
       <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
         <KafkaPanel metrics={state.metrics} />
         <LatencyChart history={state.history} />
         <GuaranteePanel swarm={state.sale.swarm} seats={state.sale.seats} />
         <ActivityFeed activity={state.sale.swarm?.activity ?? []} />
       </div>
-    </main>
+    </section>
   );
 }

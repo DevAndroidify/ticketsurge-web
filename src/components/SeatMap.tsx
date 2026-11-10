@@ -105,14 +105,24 @@ const Section = memo(function Section({
 }) {
   const rows = groupBy(seats, (s) => s.row);
   const left = seats.filter((s) => s.status === 'available').length;
+  const sold = seats.filter((s) => s.status === 'sold').length;
   const price = seats[0]?.priceMinor ?? 0;
   return (
     <div className="flex min-w-0 flex-col gap-2.5">
-      <div className="flex items-baseline justify-between border-b border-line pb-2">
-        <span className="text-base font-semibold">{name}</span>
-        <span className="text-sm text-muted tabular">
-          ${Math.round(price / 100)} · {left} left
-        </span>
+      <div className="flex flex-col gap-2">
+        <div className="flex items-baseline justify-between">
+          <span className="text-base font-semibold">{name}</span>
+          <span className="text-sm text-muted tabular">
+            ${Math.round(price / 100)} · {left} left
+          </span>
+        </div>
+        {/* The section's hairline doubles as how full it is: ink for sold. */}
+        <div role="img" aria-label={`${sold} of ${seats.length} sold`} className="h-px bg-line">
+          <div
+            className="h-px bg-ink transition-[width] duration-500"
+            style={{ width: `${seats.length ? (sold / seats.length) * 100 : 0}%` }}
+          />
+        </div>
       </div>
       <div className="flex flex-col gap-1">
         {[...rows].map(([row, list]) => (

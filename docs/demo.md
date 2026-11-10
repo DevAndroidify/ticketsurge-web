@@ -88,19 +88,27 @@ The design follows `design/live-venue.html`: white page, one green accent, squar
 lines instead of cards (Jost, plus Caveat for at most three handwritten notes). Red is kept for
 409s and 429s.
 
-**The sale** tab, top to bottom:
+It is one long page. The header stays at the top, and its three links (The sale, Control room, How
+it works) scroll to each part; the underline follows as you scroll. Boxes and rules animate in as
+they come into view, unless the system asks for reduced motion. Top to bottom:
 
-- **Counters**: waiting in line, seats left, booked, and seats sold twice, which must stay at 0.
+- **Counters**: waiting in line, seats left, booked, and seats sold twice, which must stay at 0,
+  each with a line of context. Below them, a status line and a bar showing where every buyer is.
 - **Tonight's venue**: the stage and each section with its price and seats left. Open seats are
   green, held seats are striped, sold seats are grey. Updated from the WebSocket, and reloaded
   every 5 s and after reconnecting, because Redis Pub/Sub keeps no history.
 - **You're in line**: your purchase: your place in the queue with a 20-square progress bar, the
   four steps, the hold countdown, and the result. A lost race shows the 409.
 - **Just now**: the crowd's latest moves as plain sentences (`src/components/feed.ts`).
-- **How it works, briefly**, and **What it doesn't do**.
+- **The control room** (`#control-room`), in four chapters: the crowd, one request end to end,
+  under load, and the proof. Its panels are listed below.
+- **How it works** (`#how-it-works`): one ticket's path in seven steps (the line, 429s, the
+  all-or-nothing hold, PostgreSQL's final call, Kafka, how a booking ends, live seat updates). Each
+  step says where to see it on the page and shows this sale's number for it. Beside it: **What it
+  doesn't do**, and **Words on this page**, a short glossary (hold, 409, 429, 202, outbox,
+  consumer lag, idempotency key).
 
-**How it works** scrolls to that section. The **Control room** tab (`#control-room`) holds every
-metric panel:
+The control room's panels:
 
 - **The crowd**: every dot is one buyer, moving between the stages of the sale. Your dot is labelled.
 - **Infrastructure**: Docker containers and Node services. In simulated mode they boot one by one,

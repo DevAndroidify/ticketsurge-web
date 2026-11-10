@@ -1,14 +1,8 @@
+import { motion } from 'motion/react';
 import type { Endpoints } from '../lib/live/endpoints';
+import { TABS, type Tab } from './nav';
 
 export const SOURCE_URL = 'https://github.com/DevAndroidify/ticketsurge';
-
-export type Tab = 'sale' | 'how' | 'control';
-
-const TABS: { id: Tab; label: string }[] = [
-  { id: 'sale', label: 'The sale' },
-  { id: 'how', label: 'How it works' },
-  { id: 'control', label: 'Control room' },
-];
 
 export function Header({
   tab,
@@ -31,7 +25,7 @@ export function Header({
   onStart: () => void;
 }) {
   return (
-    <header className="flex min-h-16 flex-wrap items-stretch justify-between gap-x-4 gap-y-2 border-b border-ink px-4 sm:px-8">
+    <header className="sticky top-0 z-40 flex min-h-16 flex-wrap items-stretch justify-between gap-x-4 gap-y-2 border-b border-ink bg-bg/95 px-4 backdrop-blur-sm sm:px-8">
       <div className="flex flex-wrap items-stretch gap-x-10 gap-y-1">
         <a
           href="./"
@@ -39,7 +33,6 @@ export function Header({
           onClick={(event) => {
             event.preventDefault();
             onTab('sale');
-            window.scrollTo({ top: 0, behavior: 'smooth' });
           }}
         >
           <LogoMark />
@@ -57,13 +50,19 @@ export function Header({
               onClick={() => {
                 onTab(t.id);
               }}
-              className={`flex min-h-11 items-center border-0 bg-transparent p-0 transition-colors ${
-                tab === t.id
-                  ? 'text-ink shadow-[inset_0_-3px_0_var(--color-accent)]'
-                  : 'text-muted hover:text-ink'
+              className={`relative flex min-h-11 items-center border-0 bg-transparent p-0 transition-colors ${
+                tab === t.id ? 'text-ink' : 'text-muted hover:text-ink'
               }`}
             >
               {t.label}
+              {tab === t.id && (
+                // One underline that slides from tab to tab as the page scrolls.
+                <motion.span
+                  layoutId="tab-underline"
+                  className="absolute inset-x-0 bottom-0 h-[3px] bg-accent"
+                  transition={{ type: 'spring', stiffness: 420, damping: 36 }}
+                />
+              )}
             </button>
           ))}
         </nav>
