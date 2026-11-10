@@ -346,13 +346,19 @@ function launchComets(
       opacity: path.getAttribute('stroke-opacity'),
     };
     path.setAttribute('stroke', color);
-    path.setAttribute('stroke-opacity', '0.95');
+    path.setAttribute('stroke-opacity', '0.9');
+    path.setAttribute('stroke-width', '3');
     const dots = Array.from({ length: COMET_TAIL }, (_, i) => {
       const dot = document.createElementNS(SVG_NS, 'circle');
-      dot.setAttribute('r', String(6.5 - i * 1.1));
-      dot.setAttribute('fill', i === 0 ? '#fff' : color);
+      dot.setAttribute('r', String(7 - i * 1.15));
+      dot.setAttribute('fill', color);
       dot.setAttribute('opacity', String(1 - i * 0.17));
-      if (i === 0) dot.style.filter = `drop-shadow(0 0 7px ${color})`;
+      if (i === 0) {
+        // A white rim keeps the head readable where it crosses a colored edge.
+        dot.setAttribute('stroke', '#fff');
+        dot.setAttribute('stroke-width', '2.5');
+        dot.style.filter = `drop-shadow(0 2px 6px ${color})`;
+      }
       layer.appendChild(dot);
       return dot;
     });
@@ -373,6 +379,7 @@ function retireComet(comet: Comet) {
   for (const dot of comet.dots) dot.remove();
   if (comet.stroke.color) comet.path.setAttribute('stroke', comet.stroke.color);
   if (comet.stroke.opacity) comet.path.setAttribute('stroke-opacity', comet.stroke.opacity);
+  comet.path.setAttribute('stroke-width', '2');
 }
 
 /** A ring that expands from a node as the comet arrives. CSS removes it from view. */
@@ -382,11 +389,11 @@ function flashNode(layer: SVGGElement, node: Node, color: string) {
   rect.setAttribute('y', String(node.y - NODE_H / 2));
   rect.setAttribute('width', String(NODE_W));
   rect.setAttribute('height', String(NODE_H));
-  rect.setAttribute('rx', '11');
+  rect.setAttribute('rx', '12');
   rect.setAttribute('fill', color);
-  rect.setAttribute('fill-opacity', '0.18');
+  rect.setAttribute('fill-opacity', '0.12');
   rect.setAttribute('stroke', color);
-  rect.setAttribute('stroke-width', '2');
+  rect.setAttribute('stroke-width', '2.5');
   rect.setAttribute('class', 'node-flash');
   rect.addEventListener('animationend', () => {
     rect.remove();
@@ -532,9 +539,8 @@ export function FlowDiagram({
           credit.set(edge.id, next - whole);
           while (whole-- > 0 && particles.length < MAX_PARTICLES) {
             const el = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-            el.setAttribute('r', edge.tech === 'http' ? '3' : '2.6');
+            el.setAttribute('r', edge.tech === 'http' ? '3.4' : '3');
             el.setAttribute('fill', COLORS[edge.tech]);
-            el.style.filter = `drop-shadow(0 0 4px ${COLORS[edge.tech]})`;
             group.appendChild(el);
             // Stagger births inside the frame so bursts spread out along the edge.
             particles.push({
@@ -575,6 +581,7 @@ export function FlowDiagram({
 
   return (
     <Panel
+      delay={0.05}
       title="How a booking moves through the system"
       subtitle="Small dots are traffic, at the rate the metrics report. The bright comet is your own purchase."
       right={<Legend />}
@@ -592,12 +599,20 @@ export function FlowDiagram({
                 d="M 28 0 L 0 0 0 28"
                 fill="none"
                 stroke="var(--color-line)"
-                strokeWidth="0.5"
-                opacity="0.5"
+                strokeWidth="0.7"
               />
             </pattern>
+            <filter id="node-shadow" x="-20%" y="-30%" width="140%" height="170%">
+              <feDropShadow
+                dx="0"
+                dy="3"
+                stdDeviation="4"
+                floodColor="#16130e"
+                floodOpacity="0.1"
+              />
+            </filter>
           </defs>
-          <rect x="0" y="0" width="980" height="440" fill="url(#grid)" opacity="0.6" />
+          <rect x="0" y="0" width="980" height="440" fill="url(#grid)" opacity="0.7" />
 
           {EDGES.map((edge) => {
             const down = [nodeById(edge.from), nodeById(edge.to)].some(
@@ -615,17 +630,22 @@ export function FlowDiagram({
                   d={d}
                   fill="none"
                   stroke={down ? 'var(--color-bad)' : COLORS[edge.tech]}
-                  strokeOpacity={down ? 0.5 : 0.22}
-                  strokeWidth={1.5}
-                  strokeDasharray={down ? '4 5' : undefined}
+                  strokeOpacity={down ? 0.6 : 0.3}
+                  strokeWidth={2}
+                  strokeLinecap="round"
+                  strokeDasharray={down ? '4 6' : undefined}
                 />
                 {edge.label && (
                   <text
                     x={(a.x + b.x) / 2}
                     y={(a.y + b.y) / 2 - 6}
                     textAnchor="middle"
-                    className="fill-faint font-mono"
-                    fontSize="9.5"
+                    className="fill-muted font-mono"
+                    fontSize="10"
+                    fontWeight="500"
+                    stroke="var(--color-panel)"
+                    strokeWidth="4"
+                    paintOrder="stroke"
                   >
                     {edge.label}
                   </text>
@@ -650,7 +670,7 @@ export function FlowDiagram({
         </svg>
       </div>
 
-      <div className="mt-2 min-h-10 rounded-lg border border-line bg-panel-2/50 px-3 py-2 text-xs">
+      <div className="mt-3 min-h-11 rounded-2xl bg-panel-2 px-4 py-3 text-[13px]">
         <AnimatePresence mode="wait" initial={false}>
           <motion.div
             key={latest?.id ?? 'hint'}
@@ -661,11 +681,11 @@ export function FlowDiagram({
           >
             {latest ? (
               <>
-                <span className="font-semibold text-you">{latest.title}.</span>{' '}
+                <span className="font-semibold text-you-ink">{latest.title}.</span>{' '}
                 <span className="text-muted">{latest.detail}</span>
               </>
             ) : (
-              <span className="text-faint">
+              <span className="text-muted">
                 Buy a ticket to watch your own request travel through these services.
               </span>
             )}
@@ -696,18 +716,27 @@ function NodeBox({ node, state, stat }: { node: Node; state: ComponentState; sta
       <rect
         width={NODE_W}
         height={NODE_H}
-        rx="11"
-        fill="var(--color-panel-2)"
-        stroke={border}
-        strokeOpacity={state === 'up' ? 0.55 : 0.9}
-        strokeWidth="1.2"
+        rx="12"
+        fill="var(--color-panel)"
+        stroke={state === 'up' ? 'var(--color-line)' : border}
+        strokeWidth={state === 'up' ? 1 : 2}
+        filter="url(#node-shadow)"
       />
-      <circle cx="14" cy="17" r="3.5" fill={dot}>
+      {/* A colored bar on the left says which technology the node is. */}
+      <rect x="0" y="10" width="4" height={NODE_H - 20} rx="2" fill={border} />
+      <circle cx="16" cy="17" r="3.5" fill={dot}>
         {state === 'starting' && (
           <animate attributeName="opacity" values="1;0.3;1" dur="1s" repeatCount="indefinite" />
         )}
       </circle>
-      <text x="25" y="21" fontSize="12.5" fontWeight="600" fill="var(--color-ink)">
+      <text
+        x="26"
+        y="21"
+        fontSize="13"
+        fontWeight="700"
+        fill="var(--color-ink)"
+        className="font-display"
+      >
         {node.label}
       </text>
       <text
@@ -715,7 +744,7 @@ function NodeBox({ node, state, stat }: { node: Node; state: ComponentState; sta
         y="38"
         fontSize="10"
         className="font-mono"
-        fill={state === 'down' ? 'var(--color-bad)' : 'var(--color-muted)'}
+        fill={state === 'down' ? 'var(--color-bad-ink)' : 'var(--color-muted)'}
       >
         {state === 'down' ? 'DOWN' : stat}
       </text>
@@ -734,13 +763,13 @@ function Legend() {
   return (
     <div className="flex flex-wrap gap-x-3 gap-y-1">
       {items.map(([tech, label]) => (
-        <span key={tech} className="flex items-center gap-1.5 text-[11px] text-muted">
-          <span className="size-2 rounded-full" style={{ background: COLORS[tech] }} />
+        <span key={tech} className="flex items-center gap-1.5 text-xs font-medium text-muted">
+          <span className="size-2.5 rounded-full" style={{ background: COLORS[tech] }} />
           {label}
         </span>
       ))}
-      <span className="flex items-center gap-1.5 text-[11px] text-muted">
-        <span className="size-2 rounded-full bg-you" />
+      <span className="flex items-center gap-1.5 text-xs font-medium text-muted">
+        <span className="size-2.5 rounded-full bg-you" />
         You
       </span>
     </div>

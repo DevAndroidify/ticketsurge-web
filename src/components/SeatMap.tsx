@@ -3,7 +3,7 @@ import type { SocketState } from '../lib/backend';
 import { formatInt } from '../lib/format';
 import type { SaleEvent, SeatStatus } from '../lib/types';
 import type { SeatCell } from '../state/dashboard';
-import { Panel, Pill } from './ui';
+import { Panel, Pill, Ticker } from './ui';
 
 const SEAT_CLASS: Record<SeatStatus, string> = {
   available: 'bg-seat-free text-seat-free',
@@ -55,22 +55,25 @@ export function SeatMap({
         </div>
       }
     >
-      <div className="mb-4 grid grid-cols-3 gap-2">
+      <div className="mb-6 grid grid-cols-3 gap-2.5">
         <Count label="Available" value={counts.available} swatch="bg-seat-free" />
         <Count label="Held" value={counts.held} swatch="bg-seat-held" />
         <Count label="Sold" value={counts.sold} swatch="bg-seat-sold" />
       </div>
 
       {seats.length === 0 ? (
-        <div className="grid h-48 place-items-center rounded-xl border border-dashed border-line text-xs text-faint">
-          No sale running
+        <div className="grid h-52 place-items-center rounded-2xl border-2 border-dashed border-line text-center text-sm text-muted">
+          <div>
+            <div className="font-display text-lg font-semibold text-ink">The house is empty</div>
+            Launch a flash sale or join one to fill it.
+          </div>
         </div>
       ) : (
         <div className="overflow-x-auto">
-          <div className="mx-auto mb-4 h-6 max-w-sm rounded-b-[40px] border border-t-0 border-line bg-gradient-to-b from-panel-2 to-transparent text-center text-[10px] leading-6 tracking-[0.3em] text-faint">
+          <div className="mx-auto mb-6 h-9 max-w-md rounded-b-[80px] bg-ink text-center font-display text-xs leading-9 font-semibold tracking-[0.4em] text-white">
             STAGE
           </div>
-          <div className="flex flex-wrap justify-center gap-x-6 gap-y-4">
+          <div className="flex flex-wrap justify-center gap-x-8 gap-y-5">
             {[...sections].map(([name, list]) => (
               <Section key={name} name={name} seats={list} picking={picking} />
             ))}
@@ -93,24 +96,24 @@ const Section = memo(function Section({
   const rows = groupBy(seats, (s) => s.row);
   const sold = seats.filter((s) => s.status === 'sold').length;
   // Bigger seats while choosing, so they are easy to hit.
-  const size = picking.active ? 'size-[15px] sm:size-[18px]' : 'size-[9px] sm:size-[10px]';
+  const size = picking.active ? 'size-[16px] sm:size-[19px]' : 'size-[10px] sm:size-[11px]';
   return (
     <div className="min-w-0">
-      <div className="mb-1.5 flex items-baseline justify-between gap-3 text-[11px]">
-        <span className="font-medium text-muted">{name}</span>
-        <span className="tabular text-faint">
+      <div className="mb-2 flex items-baseline justify-between gap-3 text-xs">
+        <span className="font-semibold text-ink">{name}</span>
+        <span className="text-muted tabular">
           {sold}/{seats.length}
         </span>
       </div>
       <div className="flex flex-col gap-[3px]">
         {[...rows].map(([row, list]) => (
           <div key={row} className="flex items-center gap-[3px]">
-            <span className="w-3 font-mono text-[8px] text-faint">{row}</span>
+            <span className="w-3 font-mono text-[9px] text-faint">{row}</span>
             {list.map((seat) => {
               const selected = picking.selected.has(seat.id);
               const mine = picking.mine.has(seat.id);
               const label = `${seat.section} ${seat.row}${seat.number} · ${mine ? 'yours' : seat.status}`;
-              const look = `rounded-[2px] transition-[width,height,background-color] duration-300 ${size} ${seatLook(seat.status, selected, mine)} ${seat.changedAt > 0 ? 'seat-pop' : ''}`;
+              const look = `rounded-t-[4px] rounded-b-[2px] transition-[width,height,background-color,transform] duration-300 ${size} ${seatLook(seat.status, selected, mine)} ${seat.changedAt > 0 ? 'seat-pop' : ''}`;
               // A new key replays the pop animation each time the status changes.
               const key = `${seat.id}:${seat.changedAt}`;
               if (!picking.active) return <span key={key} title={label} className={look} />;
@@ -127,7 +130,7 @@ const Section = memo(function Section({
                   onClick={() => {
                     picking.onToggle(seat.id);
                   }}
-                  className={`${look} ${clickable ? 'cursor-pointer hover:brightness-150' : 'cursor-not-allowed'}`}
+                  className={`${look} ${clickable ? 'cursor-pointer hover:scale-125 hover:bg-you/50' : 'cursor-not-allowed'}`}
                 />
               );
             })}
@@ -150,12 +153,14 @@ function seatLook(status: SeatStatus, selected: boolean, mine: boolean): string 
 
 function Count({ label, value, swatch }: { label: string; value: number; swatch: string }) {
   return (
-    <div className="rounded-lg border border-line bg-panel-2/60 px-3 py-2">
-      <div className="flex items-center gap-1.5 text-[11px] text-muted">
-        <span className={`size-2 rounded-sm ${swatch}`} />
+    <div className="rounded-2xl bg-panel-2 px-4 py-3">
+      <div className="flex items-center gap-2 text-[13px] font-medium text-muted">
+        <span className={`size-2.5 rounded-[3px] ${swatch}`} />
         {label}
       </div>
-      <div className="mt-0.5 text-lg font-semibold tabular">{formatInt(value)}</div>
+      <div className="mt-1 font-display text-2xl font-bold tracking-tight text-ink">
+        <Ticker value={value} format={formatInt} />
+      </div>
     </div>
   );
 }

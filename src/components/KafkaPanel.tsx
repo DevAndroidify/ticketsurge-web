@@ -23,7 +23,7 @@ export function KafkaPanel({ metrics }: { metrics: MetricsSnapshot | undefined }
       subtitle="Lag grows when a consumer falls behind, then drains"
       right={<Pill tone={totalLag > 50 ? 'warn' : 'good'}>lag {formatInt(totalLag)}</Pill>}
     >
-      <div className="space-y-2.5">
+      <div className="space-y-3">
         <Row
           name="booking.outbox"
           detail="rows waiting for the relay"
@@ -65,16 +65,15 @@ function Row({
 }) {
   return (
     <div>
-      <div className="mb-1 flex items-baseline justify-between gap-2 text-[11px]">
-        <span className="min-w-0 truncate">
-          <span className="font-mono text-ink">{name}</span>{' '}
-          <span className="hidden text-faint sm:inline">{detail}</span>
+      <div className="mb-1.5 flex items-baseline justify-between gap-2 text-xs">
+        <span className="min-w-0 truncate" title={detail}>
+          <span className="font-mono font-semibold text-ink">{name}</span>
         </span>
-        <span className="shrink-0 font-mono text-muted tabular">
-          {formatInt(value)} · {formatRate(rate)}/s
+        <span className="shrink-0 text-muted tabular">
+          <span className="font-semibold text-ink">{formatInt(value)}</span> · {formatRate(rate)}/s
         </span>
       </div>
-      <div className="h-1.5 overflow-hidden rounded-full bg-panel-2">
+      <div className="h-2 overflow-hidden rounded-full bg-panel-2">
         <motion.div
           className={`h-full rounded-full ${color}`}
           animate={{ width: `${Math.min(100, (value / scale) * 100)}%` }}

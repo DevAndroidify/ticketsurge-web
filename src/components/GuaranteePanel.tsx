@@ -50,19 +50,24 @@ export function GuaranteePanel({
     <Panel
       title="Guarantees"
       subtitle="Checked live from the buyers' point of view"
-      right={<ShieldCheck className="size-5 text-ok" />}
+      delay={0.12}
+      right={
+        <span className="grid size-9 place-items-center rounded-full bg-ok/12 text-ok-ink">
+          <ShieldCheck className="size-5" />
+        </span>
+      }
     >
-      <ul className="space-y-3">
+      <ul className="space-y-3.5">
         {checks.map((check) => (
           <li key={check.detail} className="flex gap-2.5">
             {check.ok ? (
-              <CircleCheck className="mt-0.5 size-4 shrink-0 text-ok" />
+              <CircleCheck className="mt-0.5 size-[18px] shrink-0 text-ok" />
             ) : (
-              <CircleX className="mt-0.5 size-4 shrink-0 text-bad" />
+              <CircleX className="mt-0.5 size-[18px] shrink-0 text-bad" />
             )}
             <div className="min-w-0">
-              <div className="text-xs font-medium text-ink tabular">{check.title}</div>
-              <div className="text-[11px] leading-relaxed text-faint">{check.detail}</div>
+              <div className="text-[13px] font-semibold text-ink tabular">{check.title}</div>
+              <div className="text-xs leading-relaxed text-muted">{check.detail}</div>
             </div>
           </li>
         ))}

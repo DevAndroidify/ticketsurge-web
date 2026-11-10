@@ -1,34 +1,49 @@
 @import 'tailwindcss';
 
-/* A dark operations-console palette. Each backend technology keeps one color everywhere:
-   HTTP blue, Redis red, Kafka amber, PostgreSQL sky, WebSocket green. */
-@theme {
-  --color-bg: #070a12;
-  --color-panel: #0d1220;
-  --color-panel-2: #121a2b;
-  --color-line: #1d2640;
-  --color-ink: #e7ebf3;
-  --color-muted: #8b95ab;
-  --color-faint: #5b6478;
+/* A bright box-office palette: warm paper, white cards, near-black ink, and one strong violet for
+   the visitor. Each backend technology keeps one color everywhere: HTTP blue, Redis red, Kafka
+   amber, PostgreSQL sky, WebSocket green. The *-ink variants are darker shades for small text,
+   so it stays readable on white. `static` keeps every variable on :root, because the canvases read
+   them with getComputedStyle even when no class uses them. */
+@theme static {
+  --color-bg: #f5f1e8;
+  --color-panel: #ffffff;
+  --color-panel-2: #f4f0e7;
+  --color-line: #e7e0d2;
+  --color-ink: #16130e;
+  --color-muted: #5f584c;
+  --color-faint: #9a9284;
 
-  --color-http: #6b93ff;
-  --color-redis: #ff6b6b;
-  --color-kafka: #f6ad2b;
-  --color-pg: #45b8ff;
-  --color-ws: #33d69f;
-  /* The visitor's own purchase, wherever it appears. */
-  --color-you: #a87aff;
+  --color-http: #2f6bff;
+  --color-http-ink: #1d4fd8;
+  --color-redis: #f0413a;
+  --color-redis-ink: #c42a24;
+  --color-kafka: #f39c12;
+  --color-kafka-ink: #9a5b00;
+  --color-pg: #0ea5e0;
+  --color-pg-ink: #036b98;
+  --color-ws: #14b885;
+  /* The visitor's own purchase, wherever it appears. Also the page's accent. */
+  --color-you: #7a3cf3;
+  --color-you-ink: #5b21c4;
 
-  --color-ok: #22c55e;
-  --color-warn: #f59e0b;
-  --color-bad: #ef4444;
+  --color-ok: #16a34a;
+  --color-ok-ink: #0f7a37;
+  --color-warn: #f0a000;
+  --color-warn-ink: #9a5b00;
+  --color-bad: #e5372e;
+  --color-bad-ink: #b42318;
 
-  --color-seat-free: #26314a;
-  --color-seat-held: #f59e0b;
-  --color-seat-sold: #10b981;
+  --color-seat-free: #e6dfd1;
+  --color-seat-held: #f5a524;
+  --color-seat-sold: #16a34a;
 
-  --font-sans: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
-  --font-mono: ui-monospace, 'SFMono-Regular', 'JetBrains Mono', Menlo, Consolas, monospace;
+  --font-display: 'Bricolage Grotesque Variable', ui-sans-serif, system-ui, sans-serif;
+  --font-sans: 'Instrument Sans Variable', ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono Variable', ui-monospace, 'SFMono-Regular', Menlo, monospace;
+
+  --shadow-card: 0 1px 2px rgb(22 19 14 / 0.05), 0 10px 30px -14px rgb(22 19 14 / 0.16);
+  --shadow-lift: 0 2px 4px rgb(22 19 14 / 0.06), 0 18px 40px -16px rgb(22 19 14 / 0.25);
 }
 
 html,
@@ -43,9 +58,13 @@ body {
   margin: 0;
   min-height: 100vh;
   background:
-    radial-gradient(1200px 600px at 10% -10%, rgb(107 147 255 / 0.08), transparent 60%),
-    radial-gradient(900px 500px at 100% 0%, rgb(246 173 43 / 0.05), transparent 60%),
-    var(--color-bg);
+    radial-gradient(900px 520px at 0% -8%, rgb(122 60 243 / 0.1), transparent 62%),
+    radial-gradient(800px 480px at 100% 0%, rgb(243 156 18 / 0.1), transparent 60%), var(--color-bg);
+  background-repeat: no-repeat;
+}
+
+::selection {
+  background: rgb(122 60 243 / 0.2);
 }
 
 .tabular {
@@ -53,29 +72,31 @@ body {
 }
 
 /* A seat that just changed pops once. */
+/* Scale only, no glow: neighbouring seats change together, and glows merge into blobs. */
 @keyframes seat-pop {
   0% {
-    transform: scale(1.45);
-    box-shadow: 0 0 6px 1px currentColor;
+    transform: scale(0.3);
+  }
+  65% {
+    transform: scale(1.25);
   }
   100% {
     transform: scale(1);
-    box-shadow: 0 0 0 0 transparent;
   }
 }
 
 .seat-pop {
-  animation: seat-pop 650ms ease-out;
+  animation: seat-pop 520ms cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 @keyframes ping-soft {
   0% {
     transform: scale(1);
-    opacity: 0.7;
+    opacity: 0.6;
   }
   80%,
   100% {
-    transform: scale(2.4);
+    transform: scale(2.6);
     opacity: 0;
   }
 }
@@ -84,65 +105,119 @@ body {
   animation: ping-soft 1.8s cubic-bezier(0, 0, 0.2, 1) infinite;
 }
 
+/* Short, because at full traffic a new line arrives many times a second. */
 @keyframes feed-in {
   from {
-    opacity: 0;
-    transform: translateX(-10px);
-    background: rgb(107 147 255 / 0.12);
+    transform: translateX(-8px);
   }
   to {
-    opacity: 1;
     transform: none;
-    background: transparent;
   }
 }
 
 .feed-in {
-  animation: feed-in 400ms ease-out;
+  animation: feed-in 220ms ease-out;
 }
 
 /* A flow-diagram node as the visitor's comet arrives. */
 @keyframes node-flash {
   from {
-    opacity: 0.95;
+    opacity: 0.9;
     transform: scale(1);
   }
   to {
     opacity: 0;
-    transform: scale(1.16);
+    transform: scale(1.22);
   }
 }
 
 .node-flash {
-  animation: node-flash 620ms ease-out forwards;
+  animation: node-flash 650ms ease-out forwards;
   transform-box: fill-box;
   transform-origin: center;
 }
 
-/* The visitor's own seats keep glowing, so they stand out in a busy map. */
+/* The visitor's own seats keep pulsing, so they stand out in a busy map. */
 @keyframes seat-mine {
   0%,
   100% {
-    box-shadow: 0 0 2px 0 currentColor;
+    box-shadow: 0 0 0 0 color-mix(in srgb, currentColor 45%, transparent);
   }
   50% {
-    box-shadow: 0 0 9px 2px currentColor;
+    box-shadow: 0 0 0 4px color-mix(in srgb, currentColor 0%, transparent);
   }
 }
 
 .seat-mine {
-  animation: seat-mine 1.4s ease-in-out infinite;
+  animation: seat-mine 1.3s ease-out infinite;
+}
+
+/* The live dot in the header. */
+@keyframes live-blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+.live-blink {
+  animation: live-blink 1.6s ease-in-out infinite;
+}
+
+/* A soft sheen that sweeps across the primary buttons on hover. */
+.sheen {
+  position: relative;
+  overflow: hidden;
+}
+
+.sheen::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    105deg,
+    transparent 35%,
+    rgb(255 255 255 / 0.35) 50%,
+    transparent 65%
+  );
+  transform: translateX(-120%);
+  transition: transform 700ms ease;
+  pointer-events: none;
+}
+
+.sheen:hover:not(:disabled)::after {
+  transform: translateX(120%);
+}
+
+/* Perforation between a ticket's body and its stub. */
+.perforation {
+  background-image: radial-gradient(circle, var(--color-line) 1.6px, transparent 1.8px);
+  background-size: 100% 9px;
+  background-position: center;
+  background-repeat: repeat-y;
 }
 
 @media (prefers-reduced-motion: reduce) {
   .seat-pop,
   .feed-in,
   .ping-soft,
-  .seat-mine {
+  .seat-mine,
+  .live-blink {
     animation: none;
+  }
+  .sheen::after {
+    display: none;
   }
 }
 
 input[type='range'] {
-  accent-color: var(--color-http);
+  accent-color: var(--color-you);
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-you);
+  outline-offset: 2px;
 }

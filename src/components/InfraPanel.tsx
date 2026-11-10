@@ -29,6 +29,7 @@ export function InfraPanel({
 
   return (
     <Panel
+      delay={0.08}
       title="Infrastructure"
       subtitle={
         mode === 'live'
@@ -58,9 +59,10 @@ export function InfraPanel({
         ))}
       </Group>
       {mode === 'live' && (
-        <p className="mt-3 text-[11px] leading-relaxed text-faint">
-          Try a failure: <code className="text-muted">docker stop ticketsurge-redis-1</code>, or
-          stop the payment service&apos;s terminal, and watch the panels react.
+        <p className="mt-4 rounded-xl bg-panel-2 px-3.5 py-2.5 text-xs leading-relaxed text-muted">
+          <span className="font-semibold text-ink">Try a failure:</span>{' '}
+          <code className="font-mono text-redis-ink">docker stop ticketsurge-redis-1</code>, or stop
+          the payment service&apos;s terminal, and watch the panels react.
         </p>
       )}
     </Panel>
@@ -77,8 +79,8 @@ function Group({
   children: React.ReactNode;
 }) {
   return (
-    <div className="mb-3 last:mb-0">
-      <div className="mb-2 flex items-center gap-1.5 text-[11px] font-medium tracking-wider text-faint uppercase">
+    <div className="mb-4 last:mb-0">
+      <div className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold tracking-[0.14em] text-muted uppercase">
         {icon}
         {label}
       </div>
@@ -107,22 +109,27 @@ function Card({
   return (
     <motion.div
       layout
-      initial={{ opacity: 0, y: 6 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: index * 0.03 }}
+      initial={{ opacity: 0, y: 8, scale: 0.97 }}
+      animate={{
+        opacity: 1,
+        y: 0,
+        scale: 1,
+        x: component.state === 'down' ? [0, -4, 4, -2, 0] : 0,
+      }}
+      transition={{ delay: index * 0.035, x: { duration: 0.4 } }}
       title={stoppable && effect ? `Stop: ${effect}` : undefined}
-      className={`group flex items-center gap-2.5 rounded-lg border px-2.5 py-2 transition-colors ${
+      className={`group relative flex items-center gap-2.5 rounded-xl border px-3 py-2.5 transition-colors ${
         component.state === 'down'
-          ? 'border-bad/40 bg-bad/5'
+          ? 'border-bad/40 bg-bad/8'
           : component.state === 'starting'
-            ? 'border-warn/30 bg-warn/5'
-            : 'border-line bg-panel-2/60'
+            ? 'border-warn/40 bg-warn/8'
+            : 'border-transparent bg-panel-2'
       }`}
     >
       <StatusDot state={component.state} />
       <div className="min-w-0 flex-1">
-        <div className="truncate text-xs font-medium text-ink">{component.label}</div>
-        <div className="truncate font-mono text-[10px] text-faint">
+        <div className="truncate text-[13px] font-semibold text-ink">{component.label}</div>
+        <div className="truncate font-mono text-[10px] text-muted">
           {component.state === 'starting'
             ? 'starting…'
             : component.state === 'down'
@@ -140,10 +147,11 @@ function Card({
             onChaos();
           }}
           aria-label={`${stopped ? 'Start' : 'Stop'} ${component.label}`}
-          className={`rounded-md p-1 transition ${
+          // Overlaid on the card's right edge, so the name gets the full width until hover.
+          className={`absolute top-1/2 right-2 -translate-y-1/2 rounded-lg bg-panel p-1.5 shadow-card transition ${
             stopped
-              ? 'text-ok hover:bg-ok/10'
-              : 'text-faint opacity-60 group-hover:opacity-100 hover:bg-bad/10 hover:text-bad'
+              ? 'text-ok-ink hover:bg-ok/12'
+              : 'text-muted opacity-0 group-hover:opacity-100 hover:text-bad-ink focus-visible:opacity-100'
           }`}
         >
           {stopped ? <Power className="size-3.5" /> : <PowerOff className="size-3.5" />}

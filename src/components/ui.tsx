@@ -2,32 +2,73 @@ import { motion, useSpring, useTransform } from 'motion/react';
 import { useEffect, type ReactNode } from 'react';
 import type { ComponentState } from '../lib/types';
 
+/**
+ * A white card that rises into place when the page loads. On mount rather than on scroll, so a
+ * card can never stay invisible (full-page screenshots, printing, very tall screens).
+ */
 export function Panel({
   title,
   subtitle,
   right,
   children,
   className = '',
+  delay = 0,
 }: {
   title: string;
   subtitle?: string;
   right?: ReactNode;
   children: ReactNode;
   className?: string;
+  /** Seconds to wait before rising in, so neighbouring cards arrive one after another. */
+  delay?: number;
 }) {
   return (
-    <section
-      className={`rounded-2xl border border-line bg-panel/80 p-4 shadow-[0_1px_0_rgb(255_255_255/0.03)_inset] backdrop-blur sm:p-5 ${className}`}
+    <motion.section
+      initial={{ opacity: 0, y: 18 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.6, delay: 0.6 + delay, ease: [0.2, 0.8, 0.2, 1] }}
+      className={`rounded-[22px] border border-line bg-panel p-5 shadow-card sm:p-6 ${className}`}
     >
-      <header className="mb-4 flex flex-wrap items-start justify-between gap-2">
+      <header className="mb-5 flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
-          <h2 className="text-sm font-semibold tracking-wide text-ink">{title}</h2>
-          {subtitle && <p className="mt-0.5 text-xs text-muted">{subtitle}</p>}
+          <h2 className="font-display text-xl leading-tight font-semibold tracking-tight text-ink">
+            {title}
+          </h2>
+          {subtitle && <p className="mt-1 text-[13px] leading-snug text-muted">{subtitle}</p>}
         </div>
         {right}
       </header>
       {children}
-    </section>
+    </motion.section>
+  );
+}
+
+/** A numbered chapter heading, so a first-time visitor can follow the page top to bottom. */
+export function SectionHeading({
+  id,
+  number,
+  title,
+  text,
+}: {
+  id: string;
+  number: string;
+  title: string;
+  text: string;
+}) {
+  return (
+    <motion.div
+      id={id}
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.6, delay: 0.55, ease: [0.2, 0.8, 0.2, 1] }}
+      className="flex scroll-mt-6 flex-wrap items-end gap-x-5 gap-y-1 pt-8"
+    >
+      <span className="font-mono text-sm font-semibold text-you-ink">{number}</span>
+      <h2 className="font-display text-3xl leading-none font-bold tracking-tight text-ink">
+        {title}
+      </h2>
+      <p className="text-[15px] text-muted">{text}</p>
+    </motion.div>
   );
 }
 
@@ -71,7 +112,7 @@ export function StatusDot({ state }: { state: ComponentState }) {
 export function Pill({ children, tone = 'neutral' }: { children: ReactNode; tone?: Tone }) {
   return (
     <span
-      className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[11px] font-medium ${TONES[tone]}`}
+      className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold tabular ${TONES[tone]}`}
     >
       {children}
     </span>
@@ -81,9 +122,9 @@ export function Pill({ children, tone = 'neutral' }: { children: ReactNode; tone
 export type Tone = 'neutral' | 'good' | 'warn' | 'bad' | 'info';
 
 const TONES: Record<Tone, string> = {
-  neutral: 'border-line bg-panel-2 text-muted',
-  good: 'border-ok/30 bg-ok/10 text-ok',
-  warn: 'border-warn/30 bg-warn/10 text-warn',
-  bad: 'border-bad/30 bg-bad/10 text-bad',
-  info: 'border-http/30 bg-http/10 text-http',
+  neutral: 'bg-panel-2 text-muted',
+  good: 'bg-ok/12 text-ok-ink',
+  warn: 'bg-warn/15 text-warn-ink',
+  bad: 'bg-bad/12 text-bad-ink',
+  info: 'bg-you/10 text-you-ink',
 };

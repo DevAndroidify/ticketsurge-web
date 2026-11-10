@@ -46,12 +46,6 @@ export interface SaleOptions {
   sections: number;
   rows: number;
   seatsPerRow: number;
-  /**
-   * Live mode only: an account listed in the backend's ADMIN_EMAILS, used to create a fresh event
-   * through POST /admin/events. It is registered on first use. Without it the newest event that is
-   * on sale and has free seats is reused.
-   */
-  admin?: { email: string; password: string };
 }
 
 export const SECTION_NAMES = ['Floor', 'Lower Bowl', 'Upper Bowl', 'Balcony', 'Gallery'];

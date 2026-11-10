@@ -18,8 +18,9 @@ process at a limited rate, so lag builds up and drains. It uses shorter timings 
 ## Live mode setup
 
 1. Start the backend as described in its README: `npm run infra:up`, migrations, topics, and the
-   services (`dev:api`, `dev:realtime`, `dev:admission`, `dev:booking-worker`, `dev:payment`,
-   `dev:tickets`, `dev:notifications`, `dev:analytics`).
+   services. `npm run dev:all` starts all eight in one terminal (`dev:api`, `dev:realtime`,
+   `dev:admission`, `dev:booking-worker`, `dev:payment`, `dev:tickets`, `dev:notifications`,
+   `dev:analytics`).
 2. Here: `npm run dev`. The site opens in live mode.
 
 The backend sends no CORS headers, so the browser only talks to the Vite server, which proxies:
@@ -35,11 +36,14 @@ The backend sends no CORS headers, so the browser only talks to the Vite server,
 Change the targets in `.env` (copy `.env.example`). `npm run preview` serves a production build with
 the same proxy.
 
-**Fresh event per run.** By default a run reuses the newest event that is on sale and still has
-free seats, such as the seeded demo event. To create a new event each time, open "Fresh event each
-run (admin)" and enter an account listed in the backend's `ADMIN_EMAILS`. The account is signed up
-on first use. Another option is `npm run loadtest:prepare -- 1` in the backend, which creates a
-fresh 500-seat event.
+**A fresh event every run, with no setup.** Creating events needs an account in the backend's
+`ADMIN_EMAILS`, so the browser never does it. The Vite dev/preview server does it instead, through
+`POST /demo/events` (`server/demo-events.ts`): it signs in as `admin@ticketsurge.local`, which is
+in the backend's default `ADMIN_EMAILS`, and creates the event. On first use it registers that
+account with a random password, kept in `.demo-admin.json` (gitignored). No credentials reach the
+page. Set `DEMO_ADMIN_EMAIL` or `DEMO_ADMIN_PASSWORD` in `.env` only if your backend uses another
+admin address, or the account already exists with a password you chose. Where `/demo/events` does
+not exist (a static host), the newest event that still has free seats is reused.
 
 Bots sign up with `bot-<run>-<n>@demo.ticketsurge.test` addresses. Each sign-up costs the API one
 scrypt hash, so sign-ups run 12 at a time.

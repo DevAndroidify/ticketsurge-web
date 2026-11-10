@@ -11,9 +11,9 @@ const WINDOW_MS = 90_000;
 
 const SERIES = [
   { key: 'ok', label: '2xx accepted', color: 'var(--color-http)' },
-  { key: 'clientError', label: '403/404 not yet', color: '#8b5cf6' },
+  { key: 'clientError', label: '403/404 not yet', color: 'var(--color-faint)' },
   { key: 'conflict', label: '409 seat taken', color: 'var(--color-warn)' },
-  { key: 'rateLimited', label: '429 rate limited', color: '#ec4899' },
+  { key: 'rateLimited', label: '429 rate limited', color: '#e8459b' },
   { key: 'serverError', label: '5xx unavailable', color: 'var(--color-bad)' },
 ] as const;
 
@@ -51,11 +51,11 @@ export function TrafficChart({ history, mode }: { history: MetricsSnapshot[]; mo
       }
       right={
         <div className="text-right">
-          <div className="text-2xl font-semibold text-ink">
+          <div className="font-display text-4xl leading-none font-bold tracking-tight text-ink">
             <Ticker value={latest?.http.total ?? 0} format={formatRate} />
-            <span className="ml-1 text-xs font-normal text-muted">req/s</span>
+            <span className="ml-1 font-sans text-sm font-medium text-muted">req/s</span>
           </div>
-          <div className="text-[11px] text-faint">peak {formatRate(peak)}</div>
+          <div className="mt-1 text-xs text-muted">peak {formatRate(peak)}</div>
         </div>
       }
     >
@@ -109,23 +109,26 @@ export function TrafficChart({ history, mode }: { history: MetricsSnapshot[]; mo
               key={series.key}
               d={smoothArea(line(k), line(k - 1))}
               fill={series.color}
-              fillOpacity={series.key === 'ok' ? 0.28 : 0.55}
+              fillOpacity={series.key === 'ok' ? 0.2 : 0.6}
             />
           ))}
           <path
             d={smoothLine(line(SERIES.length - 1))}
             fill="none"
             stroke="var(--color-http)"
-            strokeWidth="1.6"
+            strokeWidth="2.4"
+            strokeLinejoin="round"
           />
         </g>
       </svg>
-      <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1.5">
+      <div className="mt-4 flex flex-wrap gap-x-5 gap-y-2">
         {SERIES.map((series) => (
-          <span key={series.key} className="flex items-center gap-1.5 text-[11px] text-muted">
-            <span className="size-2 rounded-sm" style={{ background: series.color }} />
+          <span key={series.key} className="flex items-center gap-1.5 text-xs text-muted">
+            <span className="size-2.5 rounded-[3px]" style={{ background: series.color }} />
             {series.label}
-            <span className="tabular text-faint">{formatRate(latest?.http[series.key] ?? 0)}</span>
+            <span className="font-semibold text-ink tabular">
+              {formatRate(latest?.http[series.key] ?? 0)}
+            </span>
           </span>
         ))}
       </div>
@@ -150,7 +153,7 @@ export function LatencyChart({ history }: { history: MetricsSnapshot[] }) {
   const s = scales(now, max, LH);
 
   return (
-    <Panel title="p95 latency (ms)" subtitle="The hot paths stay fast under load">
+    <Panel title="p95 latency" subtitle="The hot paths stay fast under load" delay={0.06}>
       <svg
         viewBox={`0 0 ${W} ${LH}`}
         className="block h-auto w-full"
@@ -194,20 +197,21 @@ export function LatencyChart({ history }: { history: MetricsSnapshot[] }) {
                 d={smoothLine(points)}
                 fill="none"
                 stroke={r.color}
-                strokeWidth="1.8"
+                strokeWidth="2.4"
+                strokeLinejoin="round"
               />
             );
           })}
         </g>
       </svg>
-      <div className="mt-3 grid grid-cols-3 gap-2">
+      <div className="mt-4 divide-y divide-line rounded-xl bg-panel-2 px-3.5">
         {ROUTES.map((r) => (
-          <div key={r.route} className="rounded-lg border border-line bg-panel-2/60 px-2.5 py-2">
-            <div className="flex items-center gap-1.5 text-[11px] text-muted">
-              <span className="size-2 rounded-full" style={{ background: r.color }} />
+          <div key={r.route} className="flex items-center justify-between gap-2 py-2.5">
+            <div className="flex items-center gap-2 text-[13px] font-medium text-muted">
+              <span className="size-2.5 shrink-0 rounded-full" style={{ background: r.color }} />
               {r.label}
             </div>
-            <div className="mt-0.5 font-mono text-sm text-ink tabular">
+            <div className="font-display text-lg leading-none font-bold text-ink tabular">
               {formatMs(latest?.p95Ms[r.route])}
             </div>
           </div>

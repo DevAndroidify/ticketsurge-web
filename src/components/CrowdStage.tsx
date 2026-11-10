@@ -115,7 +115,24 @@ interface Dot {
   y: number;
   /** Each buyer moves at a slightly different speed, so a wave spreads out. */
   speed: number;
+  zone: number | undefined;
+  /** Set when the buyer changes zone; cleared with a burst when they land. */
+  arriving: boolean;
 }
+
+/** A ring (and for a sale, a few sparks) where a buyer just landed. */
+interface Burst {
+  x: number;
+  y: number;
+  born: number;
+  color: string;
+  sparks: boolean;
+}
+
+const CONFIRMED_ZONE = 5;
+const MISSED_ZONE = 7;
+const BURST_MS = 700;
+const MAX_BURSTS = 140;
 
 interface Slot {
   x: number;
@@ -164,6 +181,8 @@ export function CrowdStage({
     const line = cssColor('--color-line');
     const muted = cssColor('--color-muted');
     const ink = cssColor('--color-ink');
+    const sans = cssColor('--font-sans');
+    const display = cssColor('--font-display');
 
     let width = 0;
     let height = MIN_HEIGHT;
@@ -180,6 +199,7 @@ export function CrowdStage({
     observer.observe(canvas);
 
     const dots: Dot[] = [];
+    const bursts: Burst[] = [];
     let run: number | undefined;
     let surge = 0;
     let youDot: { x: number; y: number } | undefined;
@@ -194,6 +214,7 @@ export function CrowdStage({
       if (run !== started) {
         run = started;
         dots.length = 0;
+        bursts.length = 0;
       }
       if (phases.length > dots.length) {
         surge = Math.min(1, surge + (phases.length - dots.length) / 150);
@@ -203,6 +224,8 @@ export function CrowdStage({
           x: reduced ? 0 : -12 - Math.random() * 80,
           y: HEADER + Math.random() * (height - HEADER),
           speed: 3 + Math.random() * 3.5,
+          zone: undefined,
+          arriving: false,
         });
       }
 
@@ -223,34 +246,43 @@ export function CrowdStage({
       });
 
       ctx.clearRect(0, 0, width, height);
-      ctx.font = '600 11px ui-sans-serif, system-ui, sans-serif';
       ctx.textBaseline = 'middle';
       ZONES.forEach((zone, i) => {
         const { rect } = grids[i] ?? { rect: zoneRect(zone, width, height) };
         const color = colors[i] ?? muted;
-        ctx.globalAlpha = 0.07;
-        ctx.fillStyle = color;
+        ctx.save();
         ctx.beginPath();
-        ctx.roundRect(rect.x, rect.y, rect.w, rect.h, 10);
-        ctx.fill();
+        ctx.roundRect(rect.x, rect.y, rect.w, rect.h, 12);
+        ctx.clip();
+        ctx.globalAlpha = 0.08;
+        ctx.fillStyle = color;
+        ctx.fillRect(rect.x, rect.y, rect.w, rect.h);
+        // A colored band along the top names the zone at a glance.
         ctx.globalAlpha = 1;
+        ctx.fillRect(rect.x, rect.y, rect.w, 3);
+        ctx.restore();
         ctx.strokeStyle = line;
+        ctx.beginPath();
+        ctx.roundRect(rect.x + 0.5, rect.y + 0.5, rect.w - 1, rect.h - 1, 12);
         ctx.stroke();
 
         ctx.textAlign = 'left';
         ctx.fillStyle = muted;
-        ctx.fillText(zone.label, rect.x + 9, rect.y + 15, rect.w - 40);
+        ctx.font = `600 11.5px ${sans}`;
+        ctx.fillText(zone.label, rect.x + 10, rect.y + 17, rect.w - 44);
         ctx.textAlign = 'right';
         ctx.fillStyle = ink;
-        ctx.fillText(formatInt(counts[i] ?? 0), rect.x + rect.w - 9, rect.y + 15);
+        ctx.font = `700 14px ${display}`;
+        ctx.fillText(formatInt(counts[i] ?? 0), rect.x + rect.w - 10, rect.y + 17);
       });
+      ctx.font = `700 10.5px ${sans}`;
 
       // A burst of arrivals lights up the entrance.
       if (surge > 0.01) {
         const glow = ctx.createLinearGradient(0, 0, 90, 0);
         glow.addColorStop(0, http);
         glow.addColorStop(1, 'transparent');
-        ctx.globalAlpha = surge * 0.45;
+        ctx.globalAlpha = surge * 0.3;
         ctx.fillStyle = glow;
         ctx.fillRect(0, 0, 90, height);
         ctx.globalAlpha = 1;
@@ -276,9 +308,25 @@ export function CrowdStage({
         );
         // Waiting people shuffle a little; everyone else moves with purpose.
         const sway = phase === 'queued' && !reduced ? Math.sin(now / 420 + index * 1.7) * 0.8 : 0;
+        if (dot.zone !== zone) {
+          dot.arriving = dot.zone !== undefined;
+          dot.zone = zone;
+        }
         const ease = easing(dot.speed);
         dot.x += (targetX + sway - dot.x) * ease;
         dot.y += (targetY - dot.y) * ease;
+        if (dot.arriving && Math.abs(targetX - dot.x) + Math.abs(targetY - dot.y) < 3) {
+          dot.arriving = false;
+          if ((zone === CONFIRMED_ZONE || zone === MISSED_ZONE) && bursts.length < MAX_BURSTS) {
+            bursts.push({
+              x: targetX,
+              y: targetY,
+              born: now,
+              color: colors[zone] ?? muted,
+              sparks: zone === CONFIRMED_ZONE,
+            });
+          }
+        }
         path.moveTo(dot.x + grid.radius, dot.y);
         path.arc(dot.x, dot.y, grid.radius, 0, Math.PI * 2);
       });
@@ -286,6 +334,37 @@ export function CrowdStage({
         ctx.fillStyle = colors[i] ?? muted;
         ctx.fill(path);
       });
+
+      // A buyer who gets tickets sets off a ring and sparks; one who misses out, a faint ring.
+      for (let i = bursts.length - 1; i >= 0; i--) {
+        const burst = bursts[i];
+        if (!burst) continue;
+        const t = (now - burst.born) / BURST_MS;
+        if (t >= 1 || reduced) {
+          bursts.splice(i, 1);
+          continue;
+        }
+        const out = 1 - (1 - t) ** 3;
+        ctx.strokeStyle = burst.color;
+        ctx.globalAlpha = (1 - t) * (burst.sparks ? 0.9 : 0.45);
+        ctx.lineWidth = burst.sparks ? 2 : 1.4;
+        ctx.beginPath();
+        ctx.arc(burst.x, burst.y, 3 + out * (burst.sparks ? 15 : 9), 0, Math.PI * 2);
+        ctx.stroke();
+        if (burst.sparks) {
+          for (let k = 0; k < 6; k++) {
+            const angle = (k / 6) * Math.PI * 2 + burst.born;
+            const inner = 6 + out * 12;
+            const outer = inner + 4 * (1 - t);
+            ctx.beginPath();
+            ctx.moveTo(burst.x + Math.cos(angle) * inner, burst.y + Math.sin(angle) * inner);
+            ctx.lineTo(burst.x + Math.cos(angle) * outer, burst.y + Math.sin(angle) * outer);
+            ctx.stroke();
+          }
+        }
+      }
+      ctx.globalAlpha = 1;
+      ctx.lineWidth = 1;
 
       const yourZone = yourStep ? ZONES.findIndex((z) => z.steps.includes(yourStep)) : -1;
       const yourRect = grids[yourZone]?.rect;
@@ -310,11 +389,11 @@ export function CrowdStage({
         ctx.fill();
         // A solid label, because the dot often sits in the middle of a dense crowd.
         ctx.beginPath();
-        ctx.roundRect(youDot.x - 16, youDot.y - 30, 32, 16, 5);
+        ctx.roundRect(youDot.x - 17, youDot.y - 31, 34, 17, 8.5);
         ctx.fill();
         ctx.textAlign = 'center';
         ctx.fillStyle = '#fff';
-        ctx.fillText('YOU', youDot.x, youDot.y - 21.5);
+        ctx.fillText('YOU', youDot.x, youDot.y - 22.5);
       }
 
       frame = requestAnimationFrame(loop);

@@ -115,14 +115,20 @@ export class LiveBackend implements Backend {
     }
   }
 
+  /**
+   * Every run gets a fresh, empty event. The dev/preview server creates it with its own admin
+   * account (server/demo-events.ts), so the page needs no credentials. Where that endpoint does
+   * not exist (a static host), the newest event that still has free seats is reused instead.
+   */
   async prepareSale(options: SaleOptions): Promise<SaleEvent> {
-    if (options.admin?.email && options.admin.password) {
-      const admin = await this.signIn(options.admin.email, options.admin.password);
-      const now = Date.now();
-      const created = await request<EventBody>('POST', '/admin/events', {
-        token: admin.token,
-        body: {
-          name: `Flash sale ${new Date(now).toLocaleTimeString()}`,
+    const now = Date.now();
+    let response: Response;
+    try {
+      response = await fetch('/demo/events', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          name: `Flash sale ${new Date(now).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`,
           venue: 'Demo Arena',
           startsAt: new Date(now + 7 * 24 * 3600_000).toISOString(),
           saleStartsAt: new Date(now - 60_000).toISOString(),
@@ -133,18 +139,20 @@ export class LiveBackend implements Backend {
             rows: ROW_LABELS.slice(0, options.rows),
             seatsPerRow: options.seatsPerRow,
           })),
-        },
+        }),
+        signal: AbortSignal.timeout(15_000),
       });
-      if (!created.ok) {
-        throw new Error(
-          created.http === 403
-            ? `${options.admin.email} is not in the backend's ADMIN_EMAILS`
-            : `Could not create the event: ${created.message}`,
-        );
-      }
-      return pickEvent(created);
+    } catch {
+      throw new Error('The dev server did not answer while creating the event.');
     }
-    return this.reuseOpenEvent();
+    if (response.status === 404) return this.reuseOpenEvent();
+    const body = (await response.json().catch(() => ({}))) as Partial<EventBody> & {
+      message?: string;
+    };
+    if (!response.ok || !body.id) {
+      throw new Error(body.message ?? `Could not create the event (HTTP ${response.status}).`);
+    }
+    return pickEvent(body as EventBody);
   }
 
   async seats(eventId: string): Promise<SeatMap> {
@@ -250,22 +258,6 @@ export class LiveBackend implements Backend {
     // Nothing global to release; sockets are closed by their unsubscribe functions.
   }
 
-  private async signIn(email: string, password: string): Promise<Session> {
-    const login = await request<AuthBody>('POST', '/auth/login', { body: { email, password } });
-    if (login.ok) return toSession(login);
-    if (login.http !== 401) throw new Error(`Admin sign-in failed: ${login.message}`);
-
-    const registered = await request<AuthBody>('POST', '/auth/register', {
-      body: { email, password },
-    });
-    if (registered.ok) return toSession(registered);
-    throw new Error(
-      registered.http === 409
-        ? `${email} exists with a different password`
-        : `Admin sign-up failed: ${registered.message}`,
-    );
-  }
-
   private async reuseOpenEvent(): Promise<SaleEvent> {
     const list = await request<{ events: EventBody[] }>('GET', '/events?limit=100');
     if (!list.ok) throw new Error(`Cannot list events: ${list.message}`);
@@ -277,7 +269,7 @@ export class LiveBackend implements Backend {
       if (map.seats.some((seat) => seat.status === 'available')) return pickEvent(event);
     }
     throw new Error(
-      'No event on sale has free seats. Add admin credentials to create one, or run npm run db:seed.',
+      'No event on sale has free seats. Run this site with npm run dev so it can create one, or run npm run loadtest:prepare -- 1 in the backend.',
     );
   }
 }
