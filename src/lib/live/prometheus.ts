@@ -23,8 +23,9 @@ export function parseVector(body: unknown): Sample[] {
   return samples;
 }
 
-export async function query(expr: string): Promise<Sample[]> {
-  const response = await fetch(`/prom/api/v1/query?query=${encodeURIComponent(expr)}`, {
+/** `base` is the proxy's `/prom` or Prometheus itself, e.g. `http://localhost:9090`. */
+export async function query(base: string, expr: string): Promise<Sample[]> {
+  const response = await fetch(`${base}/api/v1/query?query=${encodeURIComponent(expr)}`, {
     signal: AbortSignal.timeout(3000),
   });
   if (!response.ok) throw new Error(`Prometheus answered ${response.status}`);

@@ -12,12 +12,13 @@ interface ErrorBody {
 }
 
 /**
- * Calls the API through the dev-server proxy (`/api/...`) and turns every response, including
- * network failures, into an Outcome. Error bodies follow the backend's `{ error: { code, message } }`.
+ * Calls the API (`url` is the full address: the proxy's `/api/...` or the visitor's localhost) and
+ * turns every response, including network failures, into an Outcome. Error bodies follow the
+ * backend's `{ error: { code, message } }`.
  */
 export async function request<T extends object>(
   method: string,
-  path: string,
+  url: string,
   options: RequestOptions = {},
 ): Promise<Outcome<T>> {
   const headers: Record<string, string> = { ...options.headers };
@@ -26,7 +27,7 @@ export async function request<T extends object>(
 
   let response: Response;
   try {
-    response = await fetch(`/api${path}`, {
+    response = await fetch(url, {
       method,
       headers,
       body: options.body === undefined ? undefined : JSON.stringify(options.body),
@@ -67,11 +68,17 @@ function parseJson(text: string): unknown {
   }
 }
 
-/** True when a plain GET to a proxied path answers 2xx within the timeout. */
-export async function reachable(url: string, timeoutMs = 2500): Promise<boolean> {
+/**
+ * True when a plain GET answers 2xx within the timeout. `opaque` is for another origin that sends
+ * no CORS headers: the status cannot be read then, so any answer at all counts as reachable.
+ */
+export async function reachable(url: string, opaque = false, timeoutMs = 2500): Promise<boolean> {
   try {
-    const response = await fetch(url, { signal: AbortSignal.timeout(timeoutMs) });
-    return response.ok;
+    const response = await fetch(url, {
+      signal: AbortSignal.timeout(timeoutMs),
+      ...(opaque ? { mode: 'no-cors' as const } : {}),
+    });
+    return opaque || response.ok;
   } catch {
     return false;
   }

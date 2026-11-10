@@ -1,13 +1,34 @@
-import { ArrowUpRight } from 'lucide-react';
+import { ArrowUpRight, Plug, Unplug } from 'lucide-react';
 import { motion } from 'motion/react';
-import type { Mode } from '../lib/types';
+import type { Endpoints } from '../lib/live/endpoints';
 
 const BACKEND_REPO = 'https://github.com/DevAndroidify/ticketsurge';
 
 const EASE = [0.2, 0.8, 0.2, 1] as const;
 
-export function Header({ mode, aside }: { mode: Mode; aside?: React.ReactNode }) {
+/** The proxy and ?mode= only exist when this site itself runs locally with npm run dev. */
+const SERVED_LOCALLY = ['localhost', '127.0.0.1'].includes(location.hostname);
+
+export function Header({
+  endpoints,
+  onConnect,
+  onDisconnect,
+  aside,
+}: {
+  /** Undefined in simulated mode. */
+  endpoints?: Endpoints;
+  onConnect: () => void;
+  onDisconnect: () => void;
+  aside?: React.ReactNode;
+}) {
+  const mode = endpoints ? 'live' : 'simulated';
   const other = mode === 'live' ? 'sim' : 'live';
+  const chip =
+    endpoints?.kind === 'direct'
+      ? 'Live · connected to your localhost'
+      : endpoints
+        ? 'Live · your local backend'
+        : 'Simulated in your browser';
   return (
     <header>
       <nav className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
@@ -27,18 +48,39 @@ export function Header({ mode, aside }: { mode: Mode; aside?: React.ReactNode })
             <span
               className={`live-blink size-2 rounded-full ${mode === 'live' ? 'bg-ok' : 'bg-warn'}`}
             />
-            {mode === 'live' ? 'Live · your local backend' : 'Simulated in your browser'}
+            {chip}
           </span>
-          <a
-            href={`?mode=${other}`}
-            className="font-medium text-muted underline decoration-line underline-offset-4 transition hover:text-ink hover:decoration-ink"
-          >
-            Switch to {other === 'live' ? 'live' : 'simulated'}
-          </a>
-          {mode === 'live' && (
+          {endpoints?.kind === 'direct' ? (
+            <button
+              type="button"
+              onClick={onDisconnect}
+              className="inline-flex items-center gap-1.5 font-medium text-muted transition hover:text-ink"
+            >
+              <Unplug className="size-4" /> Disconnect
+            </button>
+          ) : (
+            !endpoints && (
+              <button
+                type="button"
+                onClick={onConnect}
+                className="inline-flex items-center gap-1.5 rounded-full bg-ink px-3.5 py-1.5 font-semibold text-white transition hover:bg-you"
+              >
+                <Plug className="size-4" /> Connect my backend
+              </button>
+            )
+          )}
+          {SERVED_LOCALLY && endpoints?.kind !== 'direct' && (
+            <a
+              href={`?mode=${other}`}
+              className="font-medium text-muted underline decoration-line underline-offset-4 transition hover:text-ink hover:decoration-ink"
+            >
+              Switch to {other === 'live' ? 'live' : 'simulated'}
+            </a>
+          )}
+          {endpoints && (
             <>
-              <NavLink href={__GRAFANA_URL__}>Grafana</NavLink>
-              <NavLink href={__KAFKA_UI_URL__}>Kafka UI</NavLink>
+              <NavLink href={endpoints.grafanaLink}>Grafana</NavLink>
+              <NavLink href={endpoints.kafkaUiLink}>Kafka UI</NavLink>
             </>
           )}
           <NavLink href={BACKEND_REPO}>Source</NavLink>

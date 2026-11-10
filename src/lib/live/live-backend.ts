@@ -1,15 +1,4 @@
-import {
-  ROW_LABELS,
-  SECTION_NAMES,
-  SECTION_PRICES_MINOR,
-  type Backend,
-  type Outcome,
-  type QueueStatus,
-  type SaleOptions,
-  type SeatsUpdated,
-  type Session,
-  type SocketState,
-} from '../backend';
+import type { Backend, Outcome, QueueStatus, SeatsUpdated, Session, SocketState } from '../backend';
 import type {
   BookingStatus,
   ComponentState,
@@ -21,7 +10,8 @@ import type {
   SeatStatus,
 } from '../types';
 import { emptySnapshot } from '../types';
-import { reachable, request } from './http';
+import type { Endpoints } from './endpoints';
+import { reachable, request, type RequestOptions } from './http';
 import { QUERIES, query, toSnapshot, type QueryResults, type Sample } from './prometheus';
 
 interface HealthBody {
@@ -54,19 +44,31 @@ const SERVICES = [
   ['analytics-service', 'Analytics service'],
 ] as const;
 
-/** Talks to the real backend through the Vite proxy: /api, /ws, /prom, /grafana, /kafka-ui. */
+/**
+ * Talks to the real backend, either through the Vite proxy (run locally) or straight to the
+ * visitor's localhost ("Connect my backend" on a hosted copy). See endpoints.ts.
+ */
 export class LiveBackend implements Backend {
   readonly mode = 'live' as const;
   /** Makes bot emails unique per page load, so reruns never hit EMAIL_TAKEN. */
   private readonly runTag = Date.now().toString(36);
 
+  constructor(readonly endpoints: Endpoints) {}
+
+  private call<T extends object>(method: string, path: string, options?: RequestOptions) {
+    return request<T>(method, `${this.endpoints.api}${path}`, options);
+  }
+
   async components(): Promise<ComponentStatus[]> {
+    // Grafana, Kafka UI and Prometheus's /-/ready send no CORS headers (Prometheus allows other
+    // origins only on its query API), so a direct check can only see that they answer.
+    const opaque = this.endpoints.kind === 'direct';
     const [checks, up, prometheus, grafana, kafkaUi] = await Promise.all([
-      apiHealth(),
-      query('up').catch(() => undefined),
-      reachable('/prom/-/ready'),
-      reachable('/grafana/api/health'),
-      reachable('/kafka-ui/actuator/health'),
+      apiHealth(this.endpoints.api),
+      query(this.endpoints.prometheus, 'up').catch(() => undefined),
+      reachable(`${this.endpoints.prometheus}/-/ready`, opaque),
+      reachable(this.endpoints.grafanaHealth, opaque),
+      reachable(this.endpoints.kafkaUiHealth, opaque),
     ]);
 
     // The API checks PostgreSQL, Redis and Kafka itself; without it their state is unknown.
@@ -107,7 +109,9 @@ export class LiveBackend implements Backend {
     const at = Date.now();
     const keys = Object.keys(QUERIES) as (keyof typeof QUERIES)[];
     try {
-      const values = await Promise.all(keys.map((key) => query(QUERIES[key])));
+      const values = await Promise.all(
+        keys.map((key) => query(this.endpoints.prometheus, QUERIES[key])),
+      );
       const results = Object.fromEntries(keys.map((key, i) => [key, values[i]])) as QueryResults;
       return toSnapshot(results, at);
     } catch {
@@ -116,47 +120,40 @@ export class LiveBackend implements Backend {
   }
 
   /**
-   * Every run gets a fresh, empty event. The dev/preview server creates it with its own admin
-   * account (server/demo-events.ts), so the page needs no credentials. Where that endpoint does
-   * not exist (a static host), the newest event that still has free seats is reused instead.
+   * Sells from the event on sale with the most free seats (the newest wins a tie): the seeded
+   * demo event, or one opened with `npm run demo:new-event`. Most free seats, not just any, so a
+   * crowd is not sent at a leftover event with a handful of seats. The page never creates events,
+   * because that needs an admin account, and no admin credentials belong in a browser. The layout
+   * options only apply to the simulation.
    */
-  async prepareSale(options: SaleOptions): Promise<SaleEvent> {
-    const now = Date.now();
-    let response: Response;
-    try {
-      response = await fetch('/demo/events', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          name: `Flash sale ${new Date(now).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`,
-          venue: 'Demo Arena',
-          startsAt: new Date(now + 7 * 24 * 3600_000).toISOString(),
-          saleStartsAt: new Date(now - 60_000).toISOString(),
-          status: 'PUBLISHED',
-          sections: Array.from({ length: options.sections }, (_, i) => ({
-            name: SECTION_NAMES[i] ?? `Section ${i + 1}`,
-            priceMinor: SECTION_PRICES_MINOR[i] ?? 2000,
-            rows: ROW_LABELS.slice(0, options.rows),
-            seatsPerRow: options.seatsPerRow,
-          })),
-        }),
-        signal: AbortSignal.timeout(15_000),
-      });
-    } catch {
-      throw new Error('The dev server did not answer while creating the event.');
-    }
-    if (response.status === 404) return this.reuseOpenEvent();
-    const body = (await response.json().catch(() => ({}))) as Partial<EventBody> & {
-      message?: string;
-    };
-    if (!response.ok || !body.id) {
-      throw new Error(body.message ?? `Could not create the event (HTTP ${response.status}).`);
-    }
-    return pickEvent(body as EventBody);
+  async prepareSale(): Promise<SaleEvent> {
+    const list = await this.call<{ events: EventBody[] }>('GET', '/events?limit=100');
+    if (!list.ok) throw new Error(`Cannot list events: ${list.message}`);
+    const open = list.events
+      .filter((e) => e.status === 'PUBLISHED' && Date.parse(e.saleStartsAt) <= Date.now())
+      .reverse()
+      .slice(0, 12);
+    const free = await Promise.all(
+      open.map(async (event) => {
+        const map = await this.seats(event.id).catch(() => undefined);
+        return map?.seats.filter((seat) => seat.status === 'available').length ?? 0;
+      }),
+    );
+    let best = -1;
+    free.forEach((count, i) => {
+      if (count > 0 && (best < 0 || count > (free[best] ?? 0))) best = i;
+    });
+    const chosen = open[best];
+    if (chosen) return pickEvent(chosen);
+    throw new Error(
+      open.length === 0
+        ? 'No event is on sale yet. In the backend, run npm run db:seed, then try again.'
+        : 'Every event on sale is sold out. In the backend, run npm run demo:new-event, then try again.',
+    );
   }
 
   async seats(eventId: string): Promise<SeatMap> {
-    const result = await request<{ seats: Seat[]; degraded: boolean }>(
+    const result = await this.call<{ seats: Seat[]; degraded: boolean }>(
       'GET',
       `/events/${eventId}/seats`,
     );
@@ -166,7 +163,7 @@ export class LiveBackend implements Backend {
 
   async createUser(label: string): Promise<Outcome<{ session: Session }>> {
     const email = `bot-${this.runTag}-${label}@demo.ticketsurge.test`;
-    const result = await request<AuthBody>('POST', '/auth/register', {
+    const result = await this.call<AuthBody>('POST', '/auth/register', {
       body: { email, password: crypto.randomUUID() },
     });
     if (!result.ok) return result;
@@ -174,26 +171,26 @@ export class LiveBackend implements Backend {
   }
 
   async joinQueue(session: Session, eventId: string): Promise<Outcome<QueueStatus>> {
-    return request<QueueStatus>('POST', `/events/${eventId}/queue`, { token: session.token });
+    return this.call<QueueStatus>('POST', `/events/${eventId}/queue`, { token: session.token });
   }
 
   async queueStatus(session: Session, eventId: string): Promise<Outcome<QueueStatus>> {
-    return request<QueueStatus>('GET', `/events/${eventId}/queue/me`, { token: session.token });
+    return this.call<QueueStatus>('GET', `/events/${eventId}/queue/me`, { token: session.token });
   }
 
   async hold(session: Session, eventId: string, seatIds: string[]) {
-    return request<{ holdId: string; expiresAt: string }>('POST', `/events/${eventId}/holds`, {
+    return this.call<{ holdId: string; expiresAt: string }>('POST', `/events/${eventId}/holds`, {
       token: session.token,
       body: { seatIds },
     });
   }
 
   async releaseHold(session: Session, holdId: string) {
-    return request<object>('DELETE', `/holds/${holdId}`, { token: session.token });
+    return this.call<object>('DELETE', `/holds/${holdId}`, { token: session.token });
   }
 
   async book(session: Session, holdId: string, idempotencyKey: string) {
-    return request<{ bookingId: string; status: BookingStatus }>('POST', '/bookings', {
+    return this.call<{ bookingId: string; status: BookingStatus }>('POST', '/bookings', {
       token: session.token,
       body: { holdId },
       headers: { 'idempotency-key': idempotencyKey },
@@ -201,13 +198,13 @@ export class LiveBackend implements Backend {
   }
 
   async booking(session: Session, bookingId: string) {
-    return request<{ status: BookingStatus }>('GET', `/bookings/${bookingId}`, {
+    return this.call<{ status: BookingStatus }>('GET', `/bookings/${bookingId}`, {
       token: session.token,
     });
   }
 
   /**
-   * WebSocket through the proxy. Redis Pub/Sub keeps no history, so the caller reloads the seat
+   * WebSocket to the realtime gateway. Redis Pub/Sub keeps no history, so the caller reloads the seat
    * map whenever this reports `open` again after a drop.
    */
   subscribeSeats(
@@ -223,10 +220,7 @@ export class LiveBackend implements Backend {
 
     const connect = () => {
       onState('connecting');
-      const scheme = location.protocol === 'https:' ? 'wss' : 'ws';
-      socket = new WebSocket(
-        `${scheme}://${location.host}/ws?token=${encodeURIComponent(session.token)}`,
-      );
+      socket = new WebSocket(`${this.endpoints.ws}?token=${encodeURIComponent(session.token)}`);
       socket.onopen = () => {
         retryMs = 1000;
         socket?.send(JSON.stringify({ type: 'subscribe.event', eventId }));
@@ -257,30 +251,15 @@ export class LiveBackend implements Backend {
   dispose(): void {
     // Nothing global to release; sockets are closed by their unsubscribe functions.
   }
-
-  private async reuseOpenEvent(): Promise<SaleEvent> {
-    const list = await request<{ events: EventBody[] }>('GET', '/events?limit=100');
-    if (!list.ok) throw new Error(`Cannot list events: ${list.message}`);
-    const open = list.events
-      .filter((e) => e.status === 'PUBLISHED' && Date.parse(e.saleStartsAt) <= Date.now())
-      .reverse();
-    for (const event of open) {
-      const map = await this.seats(event.id);
-      if (map.seats.some((seat) => seat.status === 'available')) return pickEvent(event);
-    }
-    throw new Error(
-      'No event on sale has free seats. Run this site with npm run dev so it can create one, or run npm run loadtest:prepare -- 1 in the backend.',
-    );
-  }
 }
 
 /**
  * GET /health answers 200 when every dependency is up and 503 with the same per-dependency body
- * when one is down. Anything else (proxy error, timeout) means the API itself is not running.
+ * when one is down. Anything else (proxy error, timeout, CORS) means the API is not reachable.
  */
-async function apiHealth(): Promise<HealthBody['checks']> {
+async function apiHealth(api: string): Promise<HealthBody['checks']> {
   try {
-    const response = await fetch('/api/health', { signal: AbortSignal.timeout(3000) });
+    const response = await fetch(`${api}/health`, { signal: AbortSignal.timeout(3000) });
     if (response.status !== 200 && response.status !== 503) return undefined;
     const body = (await response.json()) as HealthBody;
     return body.checks;
@@ -289,9 +268,9 @@ async function apiHealth(): Promise<HealthBody['checks']> {
   }
 }
 
-/** True when the dev server's proxy reaches the API. Used to choose live or simulated mode. */
-export async function liveBackendAvailable(): Promise<boolean> {
-  return (await apiHealth()) !== undefined;
+/** True when the API answers at these endpoints. Used to choose live or simulated mode. */
+export async function liveBackendAvailable(endpoints: Endpoints): Promise<boolean> {
+  return (await apiHealth(endpoints.api)) !== undefined;
 }
 
 function container(id: string, label: string, ok: boolean, detail: string): ComponentStatus {

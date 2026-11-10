@@ -97,28 +97,36 @@ export function SaleControl({
           onChange={setBots}
         />
 
-        <div>
-          <div className="mb-2 text-[13px] font-medium text-muted">Venue</div>
-          <div className="grid grid-cols-3 gap-2">
-            {LAYOUTS.map((l) => (
-              <button
-                key={l.id}
-                type="button"
-                disabled={busy || reusesEvent}
-                onClick={() => {
-                  setLayout(l.id);
-                }}
-                className={`rounded-xl border px-2 py-2 text-[13px] font-semibold transition disabled:opacity-45 ${
-                  layout === l.id
-                    ? 'border-you bg-you/8 text-you-ink'
-                    : 'border-line text-muted hover:border-faint hover:text-ink'
-                }`}
-              >
-                {l.label}
-              </button>
-            ))}
+        {mode === 'live' ? (
+          <p className="rounded-xl bg-panel-2 px-3.5 py-2.5 text-xs leading-relaxed text-muted">
+            <span className="font-semibold text-ink">Venue:</span> the newest event on sale in your
+            backend. Sold out? Run{' '}
+            <code className="font-mono text-ink">npm run demo:new-event</code> there.
+          </p>
+        ) : (
+          <div>
+            <div className="mb-2 text-[13px] font-medium text-muted">Venue</div>
+            <div className="grid grid-cols-3 gap-2">
+              {LAYOUTS.map((l) => (
+                <button
+                  key={l.id}
+                  type="button"
+                  disabled={busy || reusesEvent}
+                  onClick={() => {
+                    setLayout(l.id);
+                  }}
+                  className={`rounded-xl border px-2 py-2 text-[13px] font-semibold transition disabled:opacity-45 ${
+                    layout === l.id
+                      ? 'border-you bg-you/8 text-you-ink'
+                      : 'border-line text-muted hover:border-faint hover:text-ink'
+                  }`}
+                >
+                  {l.label}
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
+        )}
 
         <Slider
           label="Buyers who abandon their hold"

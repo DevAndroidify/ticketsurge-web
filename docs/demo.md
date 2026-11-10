@@ -1,13 +1,15 @@
 # How the demo works
 
-## Two modes
+## Modes
 
-| Mode          | When                                             | Data comes from                                                             |
-| ------------- | ------------------------------------------------ | --------------------------------------------------------------------------- |
-| **Live**      | The dev server's proxy reaches `GET /api/health` | The real API, realtime gateway, Prometheus, Grafana and Kafka UI            |
-| **Simulated** | No backend answers, or `?mode=sim`               | `src/lib/sim/sim-backend.ts`, a model of the backend running in the browser |
+| Mode                | When                                                          | Data comes from                                                             |
+| ------------------- | ------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| **Live, proxied**   | This site runs locally and its proxy reaches the API          | The real API, realtime gateway, Prometheus, Grafana and Kafka UI            |
+| **Live, connected** | A hosted copy, after the visitor pressed "Connect my backend" | The same services, called straight on the visitor's `localhost`             |
+| **Simulated**       | No backend answers, or `?mode=sim`                            | `src/lib/sim/sim-backend.ts`, a model of the backend running in the browser |
 
-Force a mode with `?mode=live` or `?mode=sim`. The header link switches between them.
+When the site runs locally, force a mode with `?mode=live` or `?mode=sim`; the header link switches
+between them. The ports and paths for each live mode are in `src/lib/live/endpoints.ts`.
 
 Both modes implement the same `Backend` interface (`src/lib/backend.ts`), so the buyers, panels and
 checks are identical. The simulation follows the backend's rules: all-or-nothing holds, one active
@@ -15,10 +17,10 @@ booking per seat, idempotency keys, per-user rate limits, an outbox, and Kafka c
 process at a limited rate, so lag builds up and drains. It uses shorter timings than the backend
 (45 s holds, 30 s payment deadline) so a sale finishes in a couple of minutes.
 
-## Live mode setup
+## Run both locally (live, proxied)
 
-1. Start the backend as described in its README: `npm run infra:up`, migrations, topics, and the
-   services. `npm run dev:all` starts all eight in one terminal (`dev:api`, `dev:realtime`,
+1. Start the backend as described in its README: `npm run infra:up`, migrations, the seed, topics,
+   and the services. `npm run dev:all` starts all eight in one terminal (`dev:api`, `dev:realtime`,
    `dev:admission`, `dev:booking-worker`, `dev:payment`, `dev:tickets`, `dev:notifications`,
    `dev:analytics`).
 2. Here: `npm run dev`. The site opens in live mode.
@@ -36,14 +38,27 @@ The backend sends no CORS headers, so the browser only talks to the Vite server,
 Change the targets in `.env` (copy `.env.example`). `npm run preview` serves a production build with
 the same proxy.
 
-**A fresh event every run, with no setup.** Creating events needs an account in the backend's
-`ADMIN_EMAILS`, so the browser never does it. The Vite dev/preview server does it instead, through
-`POST /demo/events` (`server/demo-events.ts`): it signs in as `admin@ticketsurge.local`, which is
-in the backend's default `ADMIN_EMAILS`, and creates the event. On first use it registers that
-account with a random password, kept in `.demo-admin.json` (gitignored). No credentials reach the
-page. Set `DEMO_ADMIN_EMAIL` or `DEMO_ADMIN_PASSWORD` in `.env` only if your backend uses another
-admin address, or the account already exists with a password you chose. Where `/demo/events` does
-not exist (a static host), the newest event that still has free seats is reused.
+## Connect my backend (hosted copy)
+
+A hosted copy of this site (Vercel, Netlify, any static host) has no proxy. A visitor can still
+drive the real system: they run the backend on their own machine, press **Connect my backend** in
+the header, and the page calls `localhost` directly. Nothing goes through the host.
+
+1. In the backend: `git clone`, `npm install`, `cp .env.example .env`, and set `CORS_ORIGINS` to
+   this site's address (the panel shows the exact line). Then `npm run infra:up`, build, migrate,
+   seed, create the Kafka topics, and `npm run dev:all`.
+2. Press **Connect**. The panel tells "nothing is running" apart from "running, but CORS_ORIGINS
+   does not list this site". The choice is remembered in this browser; **Disconnect** forgets it.
+
+Chrome and Edge ask once before a public site may reach `localhost` (choose Allow); the API answers
+that check (Private Network Access). Safari may block a secure page from calling `http://localhost`.
+
+## Which event is sold
+
+The page never creates events: that needs an admin account, and admin credentials do not belong in
+a browser. Live sales use the newest event on sale that still has free seats, starting with the
+500-seat event from `npm run db:seed`. When it sells out, `npm run demo:new-event` in the backend
+opens a fresh one. The venue layout choice applies to the simulation only.
 
 Bots sign up with `bot-<run>-<n>@demo.ticketsurge.test` addresses. Each sign-up costs the API one
 scrypt hash, so sign-ups run 12 at a time.

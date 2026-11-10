@@ -16,6 +16,8 @@ import { SectionHeading } from './components/ui';
 import type { Backend } from './lib/backend';
 import { DEFAULT_SWARM, type BotPhase } from './lib/bots/swarm';
 import type { JourneyEntry } from './lib/buyer/journey';
+import { ConnectPanel } from './components/ConnectPanel';
+import { isConnected, LOCAL_ENDPOINTS, proxyEndpoints, setConnected } from './lib/live/endpoints';
 import { LiveBackend, liveBackendAvailable } from './lib/live/live-backend';
 import { SimBackend } from './lib/sim/sim-backend';
 import { DashboardController } from './state/dashboard';
@@ -24,30 +26,46 @@ import { DashboardController } from './state/dashboard';
 const NO_BOTS: readonly BotPhase[] = [];
 const NO_ENTRIES: readonly JourneyEntry[] = [];
 
-/** ?mode=live or ?mode=sim forces a mode; otherwise live is used when the API answers. */
-async function chooseBackend(): Promise<{ backend: Backend; fellBack: boolean }> {
+/** Why the page fell back to the simulation, if it did. */
+type Notice = 'no-backend' | 'local-down';
+
+/**
+ * 1. ?mode=sim forces the simulation.
+ * 2. After "Connect my backend", the visitor's localhost, when it answers.
+ * 3. The dev server's proxy (this site run locally with npm run dev); ?mode=live forces it.
+ * 4. Otherwise the simulation.
+ */
+async function chooseBackend(): Promise<{ backend: Backend; notice?: Notice }> {
   const requested = new URLSearchParams(location.search).get('mode');
-  if (requested === 'sim') return { backend: new SimBackend(), fellBack: false };
-  if (requested === 'live') return { backend: new LiveBackend(), fellBack: false };
-  const live = await liveBackendAvailable();
-  return { backend: live ? new LiveBackend() : new SimBackend(), fellBack: !live };
+  if (requested === 'sim') return { backend: new SimBackend() };
+  if (isConnected()) {
+    if (await liveBackendAvailable(LOCAL_ENDPOINTS)) {
+      return { backend: new LiveBackend(LOCAL_ENDPOINTS) };
+    }
+    return { backend: new SimBackend(), notice: 'local-down' };
+  }
+  const proxy = proxyEndpoints();
+  if (requested === 'live' || (await liveBackendAvailable(proxy))) {
+    return { backend: new LiveBackend(proxy) };
+  }
+  return { backend: new SimBackend(), notice: 'no-backend' };
 }
 
 export function App() {
   const [controller, setController] = useState<DashboardController>();
-  const [fellBack, setFellBack] = useState(false);
+  const [notice, setNotice] = useState<Notice>();
 
   useEffect(() => {
     let created: DashboardController | undefined;
     let cancelled = false;
-    void chooseBackend().then(({ backend, fellBack: fb }) => {
+    void chooseBackend().then(({ backend, notice: why }) => {
       if (cancelled) {
         backend.dispose();
         return;
       }
       created = new DashboardController(backend);
       setController(created);
-      setFellBack(fb);
+      setNotice(why);
     });
     return () => {
       cancelled = true;
@@ -65,18 +83,19 @@ export function App() {
       </div>
     );
   }
-  return <Dashboard controller={controller} fellBack={fellBack} />;
+  return <Dashboard controller={controller} notice={notice} />;
 }
 
-function Dashboard({
-  controller,
-  fellBack,
-}: {
-  controller: DashboardController;
-  fellBack: boolean;
-}) {
+function disconnect() {
+  setConnected(false);
+  location.reload();
+}
+
+function Dashboard({ controller, notice }: { controller: DashboardController; notice?: Notice }) {
   const state = useSyncExternalStore(controller.subscribe, controller.getSnapshot);
   const backend = controller.backend;
+  const endpoints = backend instanceof LiveBackend ? backend.endpoints : undefined;
+  const [connectOpen, setConnectOpen] = useState(false);
   const apiUp = state.components.find((c) => c.id === 'api')?.state === 'up';
   const buyer = state.buyer;
 
@@ -120,8 +139,18 @@ function Dashboard({
 
   return (
     <div className="mx-auto max-w-[1400px] space-y-5 px-4 py-6 sm:px-8 sm:py-8">
+      <ConnectPanel
+        open={connectOpen}
+        onClose={() => {
+          setConnectOpen(false);
+        }}
+      />
       <Header
-        mode={backend.mode}
+        endpoints={endpoints}
+        onConnect={() => {
+          setConnectOpen(true);
+        }}
+        onDisconnect={disconnect}
         aside={
           <TryIt
             mode={backend.mode}
@@ -142,11 +171,28 @@ function Dashboard({
         }
       />
 
-      {fellBack && (
-        <div className="rounded-2xl border border-kafka/40 bg-kafka/10 px-5 py-3 text-sm text-kafka-ink">
-          No backend answered on <code className="font-mono font-semibold">/api/health</code>, so
-          this is the in-browser simulation. To watch the real services, start the backend and run
-          this site with <code className="font-mono font-semibold">npm run dev</code>, then reload.
+      {notice && (
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-2xl border border-kafka/40 bg-kafka/10 px-5 py-3 text-sm text-kafka-ink">
+          <span className="min-w-0 flex-1">
+            {notice === 'local-down'
+              ? 'Your backend on localhost:3000 is not answering, so this is the in-browser simulation. Start it with npm run dev:all and reload.'
+              : 'This is the in-browser simulation. Run the real backend on your machine and connect this page to it.'}
+          </span>
+          {notice === 'local-down' ? (
+            <button type="button" onClick={disconnect} className="font-semibold underline">
+              Disconnect
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => {
+                setConnectOpen(true);
+              }}
+              className="font-semibold underline"
+            >
+              Connect my backend
+            </button>
+          )}
         </div>
       )}
 

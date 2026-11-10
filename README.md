@@ -21,6 +21,8 @@ npm run dev        # http://localhost:5173
 
 With the TicketSurge backend running, the dashboard connects to it (**live** mode). Without one it
 runs an in-browser model of the backend (**simulated** mode), so it also works as a static site.
+On a hosted copy, **Connect my backend** links the page to a backend the visitor runs on their own
+machine.
 
 More detail: [docs/demo.md](docs/demo.md).
 

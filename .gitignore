@@ -7,8 +7,6 @@ coverage/
 .env
 .env.*
 !.env.example
-# The demo admin's generated password (see server/demo-events.ts).
-.demo-admin.json
 
 *.log
 .DS_Store
