@@ -1,184 +1,136 @@
-import { ArrowUpRight, Plug, Unplug } from 'lucide-react';
-import { motion } from 'motion/react';
 import type { Endpoints } from '../lib/live/endpoints';
 
-const BACKEND_REPO = 'https://github.com/DevAndroidify/ticketsurge';
+export const SOURCE_URL = 'https://github.com/DevAndroidify/ticketsurge';
 
-const EASE = [0.2, 0.8, 0.2, 1] as const;
+export type Tab = 'sale' | 'how' | 'control';
 
-/** The proxy and ?mode= only exist when this site itself runs locally with npm run dev. */
-const SERVED_LOCALLY = ['localhost', '127.0.0.1'].includes(location.hostname);
+const TABS: { id: Tab; label: string }[] = [
+  { id: 'sale', label: 'The sale' },
+  { id: 'how', label: 'How it works' },
+  { id: 'control', label: 'Control room' },
+];
 
 export function Header({
+  tab,
+  onTab,
   endpoints,
   onConnect,
   onDisconnect,
-  aside,
+  startLabel,
+  canStart,
+  onStart,
 }: {
+  tab: Tab;
+  onTab: (tab: Tab) => void;
   /** Undefined in simulated mode. */
   endpoints?: Endpoints;
   onConnect: () => void;
   onDisconnect: () => void;
-  aside?: React.ReactNode;
+  startLabel: string;
+  canStart: boolean;
+  onStart: () => void;
 }) {
-  const mode = endpoints ? 'live' : 'simulated';
-  const other = mode === 'live' ? 'sim' : 'live';
-  const chip =
-    endpoints?.kind === 'direct'
-      ? 'Live · connected to your localhost'
-      : endpoints
-        ? 'Live · your local backend'
-        : 'Simulated in your browser';
   return (
-    <header>
-      <nav className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
-        <a href="./" className="flex items-center gap-2.5">
+    <header className="flex min-h-16 flex-wrap items-stretch justify-between gap-x-4 gap-y-2 border-b border-ink px-4 sm:px-8">
+      <div className="flex flex-wrap items-stretch gap-x-10 gap-y-1">
+        <a
+          href="./"
+          className="flex items-center gap-2.5 py-3 no-underline hover:opacity-75"
+          onClick={(event) => {
+            event.preventDefault();
+            onTab('sale');
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          }}
+        >
           <LogoMark />
-          <span className="font-display text-xl font-bold tracking-tight text-ink">
-            TicketSurge
-          </span>
+          <span className="text-[19px] font-bold tracking-[-0.01em]">TicketSurge</span>
         </a>
-
-        <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm">
-          <span
-            className={`flex items-center gap-2 rounded-full px-3 py-1.5 font-semibold ${
-              mode === 'live' ? 'bg-ok/12 text-ok-ink' : 'bg-warn/15 text-warn-ink'
-            }`}
-          >
-            <span
-              className={`live-blink size-2 rounded-full ${mode === 'live' ? 'bg-ok' : 'bg-warn'}`}
-            />
-            {chip}
-          </span>
-          {endpoints?.kind === 'direct' ? (
+        <nav
+          aria-label="Main"
+          className="flex flex-wrap items-stretch gap-x-7 text-[15px] font-medium"
+        >
+          {TABS.map((t) => (
             <button
+              key={t.id}
               type="button"
-              onClick={onDisconnect}
-              className="inline-flex items-center gap-1.5 font-medium text-muted transition hover:text-ink"
+              aria-current={tab === t.id ? 'page' : undefined}
+              onClick={() => {
+                onTab(t.id);
+              }}
+              className={`flex min-h-11 items-center border-0 bg-transparent p-0 transition-colors ${
+                tab === t.id
+                  ? 'text-ink shadow-[inset_0_-3px_0_var(--color-accent)]'
+                  : 'text-muted hover:text-ink'
+              }`}
             >
-              <Unplug className="size-4" /> Disconnect
+              {t.label}
             </button>
-          ) : (
-            !endpoints && (
-              <button
-                type="button"
-                onClick={onConnect}
-                className="inline-flex items-center gap-1.5 rounded-full bg-ink px-3.5 py-1.5 font-semibold text-white transition hover:bg-you"
-              >
-                <Plug className="size-4" /> Connect my backend
-              </button>
-            )
-          )}
-          {SERVED_LOCALLY && endpoints?.kind !== 'direct' && (
-            <a
-              href={`?mode=${other}`}
-              className="font-medium text-muted underline decoration-line underline-offset-4 transition hover:text-ink hover:decoration-ink"
-            >
-              Switch to {other === 'live' ? 'live' : 'simulated'}
-            </a>
-          )}
-          {endpoints && (
-            <>
-              <NavLink href={endpoints.grafanaLink}>Grafana</NavLink>
-              <NavLink href={endpoints.kafkaUiLink}>Kafka UI</NavLink>
-            </>
-          )}
-          <NavLink href={BACKEND_REPO}>Source</NavLink>
-        </div>
-      </nav>
-
-      <div className="mt-10 mb-2 grid items-center gap-10 sm:mt-14 lg:grid-cols-[minmax(0,1fr)_420px]">
-        <div>
-          <h1 className="font-display text-[clamp(2.4rem,5.2vw,4.4rem)] leading-[0.98] font-bold tracking-[-0.035em] text-ink">
-            <Line delay={0.05}>Thousands of buyers.</Line>
-            <Line delay={0.15}>One seat each.</Line>
-            <Line delay={0.25}>
-              <span className="relative inline-block text-you">
-                Never sold twice.
-                <Scribble />
-              </span>
-            </Line>
-          </h1>
-          <motion.p
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.45, ease: EASE }}
-            className="mt-6 max-w-2xl text-lg leading-relaxed text-muted"
-          >
-            A live flash sale against a real backend. Redis takes the rush, PostgreSQL decides who
-            gets each seat, and Kafka carries every booking through payment and ticketing. Send in a
-            crowd, buy a ticket yourself, and watch it all happen.
-          </motion.p>
-        </div>
-        {aside}
+          ))}
+        </nav>
+      </div>
+      <div className="flex flex-wrap items-center gap-x-5 gap-y-2 py-2">
+        <Connection endpoints={endpoints} onConnect={onConnect} onDisconnect={onDisconnect} />
+        <a
+          href={SOURCE_URL}
+          className="text-[15px] underline underline-offset-4 hover:opacity-75"
+          target="_blank"
+          rel="noreferrer"
+        >
+          Source on GitHub
+        </a>
+        <button
+          type="button"
+          disabled={!canStart}
+          onClick={onStart}
+          className="min-h-11 border-0 bg-accent px-5 text-[15px] font-semibold text-on-accent transition hover:brightness-95 disabled:cursor-not-allowed disabled:bg-sold disabled:text-muted"
+        >
+          {startLabel}
+        </button>
       </div>
     </header>
   );
 }
 
-/** Each headline line slides up from behind a mask. */
-function Line({ delay, children }: { delay: number; children: React.ReactNode }) {
+/** Where the data comes from, and the way to change it. */
+function Connection({
+  endpoints,
+  onConnect,
+  onDisconnect,
+}: {
+  endpoints?: Endpoints;
+  onConnect: () => void;
+  onDisconnect: () => void;
+}) {
+  const link =
+    'border-0 bg-transparent p-0 text-[15px] underline underline-offset-4 hover:opacity-75';
+  if (!endpoints) {
+    return (
+      <span className="flex items-center gap-2 text-sm text-muted">
+        Simulated in this tab ·
+        <button type="button" onClick={onConnect} className={`${link} text-ink`}>
+          Connect my backend
+        </button>
+      </span>
+    );
+  }
   return (
-    <span className="block overflow-hidden pb-[0.08em]">
-      <motion.span
-        className="block"
-        initial={{ y: '105%' }}
-        animate={{ y: 0 }}
-        transition={{ duration: 0.8, delay, ease: EASE }}
-      >
-        {children}
-      </motion.span>
+    <span className="flex items-center gap-2 text-sm text-muted">
+      <span className="live-blink size-2 bg-accent" />
+      {endpoints.kind === 'direct' ? 'Live · your localhost ·' : 'Live · your local backend'}
+      {endpoints.kind === 'direct' && (
+        <button type="button" onClick={onDisconnect} className={`${link} text-ink`}>
+          Disconnect
+        </button>
+      )}
     </span>
   );
 }
 
-/** A hand-drawn underline that draws itself after the headline lands. */
-function Scribble() {
+export function LogoMark({ className = 'size-[22px]' }: { className?: string }) {
   return (
-    <svg
-      viewBox="0 0 300 18"
-      preserveAspectRatio="none"
-      className="absolute -bottom-[0.12em] left-0 h-[0.22em] w-full"
-      aria-hidden
-    >
-      <motion.path
-        d="M3 12 C 60 4, 120 3, 175 8 S 270 14, 297 6"
-        fill="none"
-        stroke="var(--color-kafka)"
-        strokeWidth="5"
-        strokeLinecap="round"
-        initial={{ pathLength: 0 }}
-        animate={{ pathLength: 1 }}
-        transition={{ duration: 0.9, delay: 0.85, ease: 'easeInOut' }}
-      />
+    <svg viewBox="0 0 22 22" aria-hidden="true" className={className}>
+      <rect width="22" height="22" fill="var(--color-ink)" />
+      <rect x="9" width="4" height="22" fill="var(--color-accent)" />
     </svg>
-  );
-}
-
-export function LogoMark({ className = 'size-9' }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 36 36" className={className} aria-hidden>
-      <rect width="36" height="36" rx="10" fill="var(--color-ink)" />
-      {/* A ticket with notches on both sides and a perforated stub. */}
-      <path
-        d="M8 11h20v4.5a2.5 2.5 0 0 0 0 5V25H8v-4.5a2.5 2.5 0 0 0 0-5z"
-        fill="var(--color-you)"
-      />
-      <path d="M21 12.5v11" stroke="var(--color-ink)" strokeWidth="1.6" strokeDasharray="1.6 1.8" />
-    </svg>
-  );
-}
-
-function NavLink({ href, children }: { href: string; children: React.ReactNode }) {
-  return (
-    <a
-      href={href}
-      target="_blank"
-      rel="noreferrer"
-      className="group flex items-center gap-0.5 font-medium text-muted transition hover:text-ink"
-    >
-      {children}
-      <ArrowUpRight className="size-3.5 transition group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
-    </a>
   );
 }

@@ -1,53 +1,70 @@
 @import 'tailwindcss';
 
-/* A bright box-office palette: warm paper, white cards, near-black ink, and one strong violet for
-   the visitor. Each backend technology keeps one color everywhere: HTTP blue, Redis red, Kafka
-   amber, PostgreSQL sky, WebSocket green. The *-ink variants are darker shades for small text,
-   so it stays readable on white. `static` keeps every variable on :root, because the canvases read
-   them with getComputedStyle even when no class uses them. */
+/* "Live Venue": white page, near-black ink, one green accent, square corners, 1px lines instead of
+   cards. Reference: design/live-venue.html. `static` keeps every variable on :root, because the
+   canvases read them with getComputedStyle even when no class uses them. */
 @theme static {
-  --color-bg: #f5f1e8;
-  --color-panel: #ffffff;
-  --color-panel-2: #f4f0e7;
-  --color-line: #e7e0d2;
-  --color-ink: #16130e;
-  --color-muted: #5f584c;
-  --color-faint: #9a9284;
+  --color-bg: #ffffff;
+  --color-ink: #111612;
+  --color-muted: #59625b;
+  --color-line: #dfe4e0;
+  --color-tint: #eef8f3;
+  --color-accent: #00b97a;
+  /* The accent as text: passes contrast on white. */
+  --color-accent-text: #00784f;
+  --color-on-accent: #04150d;
+  --color-sold: #e3e8e4;
+  /* Second stripe colour of held seats (the first is ink). */
+  --color-held-b: #bfe9d6;
+  /* 409s and 429s only, never decoration. */
+  --color-error: #d92d20;
 
+  /* Control room. Its panels and canvases keep one colour per technology (HTTP, Redis, Kafka,
+     PostgreSQL, WebSocket) and a few status colours, re-based on the palette above. */
+  --color-panel: #ffffff;
+  --color-panel-2: #f4f6f4;
+  --color-faint: #8d968f;
   --color-http: #2f6bff;
   --color-http-ink: #1d4fd8;
-  --color-redis: #f0413a;
-  --color-redis-ink: #c42a24;
+  --color-redis: #e5372e;
+  --color-redis-ink: #b42318;
   --color-kafka: #f39c12;
-  --color-kafka-ink: #9a5b00;
+  --color-kafka-ink: #8a5200;
   --color-pg: #0ea5e0;
   --color-pg-ink: #036b98;
-  --color-ws: #14b885;
-  /* The visitor's own purchase, wherever it appears. Also the page's accent. */
-  --color-you: #7a3cf3;
-  --color-you-ink: #5b21c4;
-
-  --color-ok: #16a34a;
-  --color-ok-ink: #0f7a37;
+  --color-ws: #00b97a;
+  --color-you: #00b97a;
+  --color-you-ink: #00784f;
+  --color-ok: #00b97a;
+  --color-ok-ink: #00784f;
   --color-warn: #f0a000;
-  --color-warn-ink: #9a5b00;
-  --color-bad: #e5372e;
+  --color-warn-ink: #8a5200;
+  --color-bad: #d92d20;
   --color-bad-ink: #b42318;
+  --color-seat-free: #00b97a;
+  --color-seat-held: #111612;
+  --color-seat-sold: #e3e8e4;
 
-  --color-seat-free: #e6dfd1;
-  --color-seat-held: #f5a524;
-  --color-seat-sold: #16a34a;
+  --font-sans: 'Jost', 'Futura', 'Century Gothic', ui-sans-serif, system-ui, sans-serif;
+  --font-display: 'Jost', 'Futura', 'Century Gothic', ui-sans-serif, system-ui, sans-serif;
+  --font-hand: 'Caveat', cursive;
+  --font-mono: ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
 
-  --font-display: 'Bricolage Grotesque Variable', ui-sans-serif, system-ui, sans-serif;
-  --font-sans: 'Instrument Sans Variable', ui-sans-serif, system-ui, -apple-system, sans-serif;
-  --font-mono: 'JetBrains Mono Variable', ui-monospace, 'SFMono-Regular', Menlo, monospace;
+  /* No shadows anywhere. */
+  --shadow-card: none;
+  --shadow-lift: none;
+}
 
-  --shadow-card: 0 1px 2px rgb(22 19 14 / 0.05), 0 10px 30px -14px rgb(22 19 14 / 0.16);
-  --shadow-lift: 0 2px 4px rgb(22 19 14 / 0.06), 0 18px 40px -16px rgb(22 19 14 / 0.25);
+/* Square corners everywhere, including the Control room's older panels. */
+*,
+*::before,
+*::after {
+  border-radius: 0 !important;
 }
 
 html,
 body {
+  margin: 0;
   background: var(--color-bg);
   color: var(--color-ink);
   font-family: var(--font-sans);
@@ -55,30 +72,33 @@ body {
 }
 
 body {
-  margin: 0;
   min-height: 100vh;
-  background:
-    radial-gradient(900px 520px at 0% -8%, rgb(122 60 243 / 0.1), transparent 62%),
-    radial-gradient(800px 480px at 100% 0%, rgb(243 156 18 / 0.1), transparent 60%), var(--color-bg);
-  background-repeat: no-repeat;
 }
 
 ::selection {
-  background: rgb(122 60 243 / 0.2);
+  background: var(--color-held-b);
 }
 
 .tabular {
   font-variant-numeric: tabular-nums;
 }
 
-/* A seat that just changed pops once. */
-/* Scale only, no glow: neighbouring seats change together, and glows merge into blobs. */
+/* Held seat: diagonal ink stripes. */
+.seat-held {
+  background: repeating-linear-gradient(
+    45deg,
+    var(--color-ink) 0 1.5px,
+    var(--color-held-b) 1.5px 4px
+  );
+}
+
+/* A seat that just changed pops once. Scale only: neighbouring seats change together. */
 @keyframes seat-pop {
   0% {
-    transform: scale(0.3);
+    transform: scale(0.4);
   }
   65% {
-    transform: scale(1.25);
+    transform: scale(1.18);
   }
   100% {
     transform: scale(1);
@@ -86,7 +106,7 @@ body {
 }
 
 .seat-pop {
-  animation: seat-pop 520ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  animation: seat-pop 420ms cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 @keyframes ping-soft {
@@ -108,15 +128,17 @@ body {
 /* Short, because at full traffic a new line arrives many times a second. */
 @keyframes feed-in {
   from {
-    transform: translateX(-8px);
+    transform: translateY(-6px);
+    opacity: 0;
   }
   to {
     transform: none;
+    opacity: 1;
   }
 }
 
 .feed-in {
-  animation: feed-in 220ms ease-out;
+  animation: feed-in 240ms ease-out;
 }
 
 /* A flow-diagram node as the visitor's comet arrives. */
@@ -137,22 +159,21 @@ body {
   transform-origin: center;
 }
 
-/* The visitor's own seats keep pulsing, so they stand out in a busy map. */
+/* The visitor's own seats blink gently, so they stand out in a busy map. */
 @keyframes seat-mine {
   0%,
   100% {
-    box-shadow: 0 0 0 0 color-mix(in srgb, currentColor 45%, transparent);
+    opacity: 1;
   }
   50% {
-    box-shadow: 0 0 0 4px color-mix(in srgb, currentColor 0%, transparent);
+    opacity: 0.45;
   }
 }
 
 .seat-mine {
-  animation: seat-mine 1.3s ease-out infinite;
+  animation: seat-mine 1.3s ease-in-out infinite;
 }
 
-/* The live dot in the header. */
 @keyframes live-blink {
   0%,
   100% {
@@ -167,32 +188,11 @@ body {
   animation: live-blink 1.6s ease-in-out infinite;
 }
 
-/* A soft sheen that sweeps across the primary buttons on hover. */
+/* Kept for the Control room's buttons; no sweep in this design. */
 .sheen {
   position: relative;
-  overflow: hidden;
 }
 
-.sheen::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(
-    105deg,
-    transparent 35%,
-    rgb(255 255 255 / 0.35) 50%,
-    transparent 65%
-  );
-  transform: translateX(-120%);
-  transition: transform 700ms ease;
-  pointer-events: none;
-}
-
-.sheen:hover:not(:disabled)::after {
-  transform: translateX(120%);
-}
-
-/* Perforation between a ticket's body and its stub. */
 .perforation {
   background-image: radial-gradient(circle, var(--color-line) 1.6px, transparent 1.8px);
   background-size: 100% 9px;
@@ -208,16 +208,13 @@ body {
   .live-blink {
     animation: none;
   }
-  .sheen::after {
-    display: none;
-  }
 }
 
 input[type='range'] {
-  accent-color: var(--color-you);
+  accent-color: var(--color-accent);
 }
 
 :focus-visible {
-  outline: 2px solid var(--color-you);
+  outline: 2px solid var(--color-ink);
   outline-offset: 2px;
 }

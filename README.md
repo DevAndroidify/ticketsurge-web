@@ -9,7 +9,7 @@ it and watch your own request travel through the architecture, step by step. The
 which services are up, requests per second, the seat map filling over WebSocket, Kafka lag building
 and draining, and a live check that no seat is ever sold twice.
 
-![Dashboard during a live flash sale](docs/screenshot.png)
+![The sale page during a flash sale](docs/screenshot.png)
 
 ## Run it
 

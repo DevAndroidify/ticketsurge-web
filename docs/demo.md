@@ -65,28 +65,44 @@ scrypt hash, so sign-ups run 12 at a time.
 
 ## Things to try
 
-1. **Buy a ticket.** "Join the sale" opens an event if there is none, then takes you through the
+1. **Buy a ticket.** "Get in line" opens an event if there is none, then takes you through the
    queue, seat selection, a hold with a countdown, and payment. It uses the same `Backend` calls as
    the bots.
-2. **Race the crowd.** While you are choosing seats, press "Send in the crowd". It joins your event
-   instead of replacing it, and you queue and compete with it for real.
-3. **Increase the traffic.** During a sale, +50, +200 and +500 add a burst of buyers, and "Steady
-   arrivals" keeps adding them every second. A crowd is capped at 2,000 buyers.
+2. **Race the crowd.** While you are choosing seats, press "Send in the crowd" in the header. It
+   joins your event instead of replacing it, and you queue and compete with it for real.
+3. **Increase the traffic.** In the Control room, during a sale, +50, +200 and +500 add a burst of
+   buyers, and "Steady arrivals" keeps adding them every second. A crowd is capped at 2,000.
 4. **Lose on purpose.** Choose a seat and wait for a bot to take it, then press Hold. The 409 and
    the "changed nothing" outcome are the guarantee at work.
 
 Payment needs no card: `payment-service` simulates the charge and declines a share of them. The
-confirmed card shows the booking, because the API has no endpoint for reading ticket codes.
+confirmation shows the booking, because the API has no endpoint for reading ticket codes.
 
 In live mode every bot runs in the browser tab, so the browser's connection limit, rather than the
 backend, sets how many requests per second a large crowd can produce. The k6 scripts in the backend
 repo are the way to measure real capacity.
 
-## The panels
+## The page
+
+The design follows `design/live-venue.html`: white page, one green accent, square corners, and 1px
+lines instead of cards (Jost, plus Caveat for at most three handwritten notes). Red is kept for
+409s and 429s.
+
+**The sale** tab, top to bottom:
+
+- **Counters**: waiting in line, seats left, booked, and seats sold twice, which must stay at 0.
+- **Tonight's venue**: the stage and each section with its price and seats left. Open seats are
+  green, held seats are striped, sold seats are grey. Updated from the WebSocket, and reloaded
+  every 5 s and after reconnecting, because Redis Pub/Sub keeps no history.
+- **You're in line**: your purchase: your place in the queue with a 20-square progress bar, the
+  four steps, the hold countdown, and the result. A lost race shows the 409.
+- **Just now**: the crowd's latest moves as plain sentences (`src/components/feed.ts`).
+- **How it works, briefly**, and **What it doesn't do**.
+
+**How it works** scrolls to that section. The **Control room** tab (`#control-room`) holds every
+metric panel:
 
 - **The crowd**: every dot is one buyer, moving between the stages of the sale. Your dot is labelled.
-- **Buy a ticket yourself**: your purchase, plus "What just happened" with each request's real HTTP
-  status and time.
 - **Infrastructure**: Docker containers and Node services. In simulated mode they boot one by one,
   and Redis, the booking worker, payment, ticket and notification services can be stopped to see
   what happens (503s and retries, outbox backlog, Kafka lag, expiries and refunds).
@@ -98,8 +114,6 @@ repo are the way to measure real capacity.
   buyer for the same seat.
 - **Flash sale**: crowd settings, traffic controls while a sale runs, and the crowd's funnel from
   sign-up to confirmed, failed, expired or missed out.
-- **Seat map**: updated from the WebSocket, and reloaded every 5 s and after reconnecting, because
-  Redis Pub/Sub keeps no history.
 - **Kafka consumers**: lag and throughput per consumer group, plus the outbox backlog.
 - **Guarantees**: checked from the buyers' side: no seat confirmed for two buyers, duplicate
   booking requests return one booking, and confirmed seats show as sold.
