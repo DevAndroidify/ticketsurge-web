@@ -5,7 +5,7 @@
   "description": "Live demonstration dashboard for the TicketSurge flash-sale backend",
   "type": "module",
   "engines": {
-    "node": ">=24.0.0"
+    "node": "24.x"
   },
   "scripts": {
     "dev": "vite",

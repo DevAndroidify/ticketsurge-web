@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react';
 import { checkLocalBackend, setConnected, type LocalCheck } from '../lib/live/endpoints';
 
 const BACKEND_REPO = 'https://github.com/DevAndroidify/ticketsurge';
+/** The deployed site. The backend's .env.example already lists it in CORS_ORIGINS. */
+const LIVE_SITE = 'https://ticketsurge-web.vercel.app';
 
 type Status = 'idle' | 'checking' | LocalCheck;
 
@@ -40,7 +42,9 @@ export function ConnectPanel({ open, onClose }: { open: boolean; onClose: () => 
   const steps: { text: string; command: string }[] = [
     { text: 'Clone the backend', command: `git clone ${BACKEND_REPO} && cd ticketsurge` },
     { text: 'Install and copy the settings', command: 'npm install && cp .env.example .env' },
-    { text: 'In .env, allow this site', command: corsLine },
+    origin === LIVE_SITE
+      ? { text: 'Check .env allows this site (.env.example already does)', command: corsLine }
+      : { text: 'In .env, allow this site', command: corsLine },
     { text: 'Start Docker: PostgreSQL, Redis, Kafka', command: 'npm run infra:up' },
     {
       text: 'Build, create the tables and the demo event',

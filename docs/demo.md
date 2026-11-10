@@ -40,13 +40,15 @@ the same proxy.
 
 ## Connect my backend (hosted copy)
 
-A hosted copy of this site (Vercel, Netlify, any static host) has no proxy. A visitor can still
-drive the real system: they run the backend on their own machine, press **Connect my backend** in
-the header, and the page calls `localhost` directly. Nothing goes through the host.
+The site is deployed at https://ticketsurge-web.vercel.app. A hosted copy (Vercel, Netlify, any
+static host) has no proxy. A visitor can still drive the real system: they run the backend on
+their own machine, press **Connect my backend** in the header, and the page calls `localhost`
+directly. Nothing goes through the host.
 
-1. In the backend: `git clone`, `npm install`, `cp .env.example .env`, and set `CORS_ORIGINS` to
-   this site's address (the panel shows the exact line). Then `npm run infra:up`, build, migrate,
-   seed, create the Kafka topics, and `npm run dev:all`.
+1. In the backend: `git clone`, `npm install`, `cp .env.example .env`. The backend's
+   `.env.example` already lists https://ticketsurge-web.vercel.app in `CORS_ORIGINS`; another copy
+   of the site needs its own address added there (the panel shows the exact line). Then
+   `npm run infra:up`, build, migrate, seed, create the Kafka topics, and `npm run dev:all`.
 2. Press **Connect**. The panel tells "nothing is running" apart from "running, but CORS_ORIGINS
    does not list this site". The choice is remembered in this browser; **Disconnect** forgets it.
 
